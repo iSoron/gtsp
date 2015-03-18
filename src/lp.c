@@ -7,11 +7,11 @@
 
 #define LP_EPSILON 0.000001
 
-int lp_open(struct LP *lp)
+int LP_open(struct LP *lp)
 {
     int rval = 0;
 
-    lp->cplex_lp = (CPXLPptr)NULL;
+    lp->cplex_lp = (CPXLPptr) NULL;
     lp->cplex_env = CPXopenCPLEX(&rval);
     if (rval)
     {
@@ -23,7 +23,7 @@ int lp_open(struct LP *lp)
     return rval;
 }
 
-void lp_free(struct LP *lp)
+void LP_free(struct LP *lp)
 {
     if (!lp) return;
     if (!lp->cplex_env) return;
@@ -35,7 +35,7 @@ void lp_free(struct LP *lp)
     lp->cplex_env = 0;
 }
 
-int lp_create(struct LP *lp, const char *name)
+int LP_create(struct LP *lp, const char *name)
 {
     int rval = 0;
     char nambuf[MAX_NAME_LENGTH];
@@ -52,12 +52,11 @@ int lp_create(struct LP *lp, const char *name)
     return rval;
 }
 
-int lp_new_row(struct LP *lp, char sense, double rhs)
+int LP_new_row(struct LP *lp, char sense, double rhs)
 {
     int rval = 0;
 
-    rval = CPXnewrows(lp->cplex_env, lp->cplex_lp, 1, &rhs, &sense,
-            (double *) NULL, (char **) NULL);
+    rval = CPXnewrows(lp->cplex_env, lp->cplex_lp, 1, &rhs, &sense, 0, 0);
 
     ABORT_IF(rval, "CPXnewrows failed\n");
 
@@ -65,14 +64,20 @@ int lp_new_row(struct LP *lp, char sense, double rhs)
     return rval;
 }
 
-int lp_add_rows(
-        struct LP *lp, int newrows, int newnz, double *rhs, char *sense,
-        int *rmatbeg, int *rmatind, double *rmatval)
+int LP_add_rows(
+        struct LP *lp,
+        int newrows,
+        int newnz,
+        double *rhs,
+        char *sense,
+        int *rmatbeg,
+        int *rmatind,
+        double *rmatval)
 {
     int rval = 0;
 
     rval = CPXaddrows(lp->cplex_env, lp->cplex_lp, 0, newrows, newnz, rhs,
-            sense, rmatbeg, rmatind, rmatval, (char **) NULL, (char **) NULL);
+            sense, rmatbeg, rmatind, rmatval, 0, 0);
 
     ABORT_IF(rval, "CPXaddrows failed\n");
 
@@ -80,9 +85,16 @@ int lp_add_rows(
     return rval;
 }
 
-int lp_add_cols(
-        struct LP *lp, int newcols, int newnz, double *obj, int *cmatbeg,
-        int *cmatind, double *cmatval, double *lb, double *ub)
+int LP_add_cols(
+        struct LP *lp,
+        int newcols,
+        int newnz,
+        double *obj,
+        int *cmatbeg,
+        int *cmatind,
+        double *cmatval,
+        double *lb,
+        double *ub)
 {
     int rval = 0;
 
@@ -95,7 +107,7 @@ int lp_add_cols(
     return rval;
 }
 
-int lp_change_bound(struct LP *lp, int col, char lower_or_upper, double bnd)
+int LP_change_bound(struct LP *lp, int col, char lower_or_upper, double bnd)
 {
     int rval = 0;
 
@@ -107,7 +119,7 @@ int lp_change_bound(struct LP *lp, int col, char lower_or_upper, double bnd)
     return rval;
 }
 
-int lp_optimize(struct LP *lp, int *infeasible)
+int LP_optimize(struct LP *lp, int *infeasible)
 {
     int rval = 0, solstat;
 
@@ -134,7 +146,7 @@ int lp_optimize(struct LP *lp, int *infeasible)
     return rval;
 }
 
-int lp_get_obj_val(struct LP *lp, double *obj)
+int LP_get_obj_val(struct LP *lp, double *obj)
 {
     int rval = 0;
 
@@ -145,7 +157,7 @@ int lp_get_obj_val(struct LP *lp, double *obj)
     return rval;
 }
 
-int lp_get_x(struct LP *lp, double *x)
+int LP_get_x(struct LP *lp, double *x)
 {
     int rval = 0;
 
@@ -159,7 +171,12 @@ int lp_get_x(struct LP *lp, double *x)
     return rval;
 }
 
-int lp_write(struct LP *lp, const char *fname)
+int LP_get_num_cols(struct LP *lp)
+{
+    return CPXgetnumcols(lp->cplex_env, lp->cplex_lp);
+}
+
+int LP_write(struct LP *lp, const char *fname)
 {
     int rval = 0;
 

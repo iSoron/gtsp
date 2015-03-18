@@ -3,15 +3,23 @@
 
 #include "lp.h"
 
-int bnc_solve_node(
-        struct LP *lp, double *best_val, int ncount, int ecount, int *elist,
-        int depth);
+struct BNC
+{
+    struct LP *lp;
+    double best_val;
+    int *problem_data;
 
-int bnc_branch_node(
-        struct LP *lp, double *x, int ncount, int ecount, int depth,
-        double *current_val, int *elist);
+    int (*problem_init_lp)(struct LP *, void *);
 
-int bnc_init_lp(
-        struct LP *lp, int node_count, int edge_count, int *edge_list, int *edge_weights);
+    int (*problem_add_cutting_planes)(struct LP *, void *);
+};
+
+int BNC_init(struct BNC *bnc);
+
+int BNC_solve(struct BNC *bnc);
+
+int BNC_init_lp(struct BNC *bnc);
+
+void BNC_free(struct BNC *bnc);
 
 #endif //_PROJECT_BRANCH_AND_CUT_H_

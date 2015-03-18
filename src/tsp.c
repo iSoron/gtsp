@@ -4,17 +4,36 @@
 #include "tsp.h"
 #include "util.h"
 
-int TSP_init_lp(
-        int node_count, struct LP *lp, int edge_count, int *edge_weights,
-        int *edge_list)
+int TSP_init_data(struct TSPData *data)
 {
+    data->node_count = 0;
+    data->edge_count = 0;
+    data->edge_weights = 0;
+    data->edge_list = 0;
+
+    return 0;
+}
+
+void TSP_free_data(struct TSPData *data)
+{
+    if (data->edge_list) free(data->edge_list);
+    if (data->edge_weights) free(data->edge_weights);
+}
+
+int TSP_init_lp(struct LP *lp, struct TSPData *data)
+{
+    int node_count = data->node_count;
+    int edge_count = data->edge_count;
+    int *edge_list = data->edge_list;
+    int *edge_weights = data->edge_weights;
+
     int rval = 0;
 
     /* Build a row for each degree equation */
     for (int i = 0; i < node_count; i++)
     {
-        rval = lp_new_row(lp, 'E', 2.0);
-        ABORT_IF(rval, "lp_new_row failed\n");
+        rval = LP_new_row(lp, 'E', 2.0);
+        ABORT_IF(rval, "LP_new_row failed\n");
     }
 
     /* Build a column for each edge of the graph */
@@ -27,10 +46,10 @@ int TSP_init_lp(
         double obj = (double) edge_weights[j];
         int cmatind[] = {edge_list[2 * j], edge_list[2 * j + 1]};
 
-        rval = lp_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
+        rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
                 &ub);
 
-        ABORT_IF(rval, "lp_add_cols failed\n");
+        ABORT_IF(rval, "LP_add_cols failed\n");
     }
 
     CLEANUP:
@@ -38,8 +57,13 @@ int TSP_init_lp(
 }
 
 int TSP_find_violated_subtour_elimination_cut(
-        int ncount, int edge_count, int *edges, struct LP *lp)
+        struct LP *lp,
+        struct TSPData *data)
 {
+    int ncount = data->node_count;
+    int edge_count = data->edge_count;
+    int *edges = data->edge_list;
+
     int rval = 0;
     int is_infeasible = 0;
 
@@ -53,8 +77,8 @@ int TSP_find_violated_subtour_elimination_cut(
     struct Graph G;
     graph_init(&G);
 
-    rval = lp_optimize(lp, &is_infeasible);
-    ABORT_IF(rval, "lp_optimize failed\n");
+    rval = LP_optimize(lp, &is_infeasible);
+    ABORT_IF(rval, "LP_optimize failed\n");
     ABORT_IF(is_infeasible, "LP is infeasible\n");
 
     rval = graph_build(ncount, edge_count, edges, &G);
@@ -77,8 +101,8 @@ int TSP_find_violated_subtour_elimination_cut(
     for (int i = 0; i < ncount; i++)
         marks[i] = 0;
 
-    rval = lp_get_x(lp, x);
-    ABORT_IF(rval, "lp_get_x failed\n");
+    rval = LP_get_x(lp, x);
+    ABORT_IF(rval, "LP_get_x failed\n");
 
     int round = 0;
     int delta_count = 0;
@@ -87,7 +111,7 @@ int TSP_find_violated_subtour_elimination_cut(
     while (!TSP_is_graph_connected(&G, x, &island_count, island_sizes,
             island_start, island_nodes))
     {
-        time_printf("Adding %d bnc_solve_node inequalities...\n", island_count);
+        time_printf("Adding %d BNC_solve_node inequalities...\n", island_count);
         for (int i = 0; i < island_count; i++)
         {
             get_delta(island_sizes[i], island_nodes + island_start[i],
@@ -99,19 +123,19 @@ int TSP_find_violated_subtour_elimination_cut(
         time_printf("Reoptimizing (round %d)...\n", ++round);
         ABORT_IF(rval, "TSP_add_subtour_elimination_cut failed");
 
-        rval = lp_optimize(lp, &is_infeasible);
-        ABORT_IF(rval, "lp_optimize failed\n");
+        rval = LP_optimize(lp, &is_infeasible);
+        ABORT_IF(rval, "LP_optimize failed\n");
         ABORT_IF(is_infeasible, "LP is infeasible\n");
 
         double objval = 0;
-        rval = lp_get_obj_val(lp, &objval);
-        ABORT_IF(rval, "lp_get_obj_val failed\n");
+        rval = LP_get_obj_val(lp, &objval);
+        ABORT_IF(rval, "LP_get_obj_val failed\n");
 
-        rval = lp_get_x(lp, x);
-        ABORT_IF(rval, "lp_get_x failed\n");
+        rval = LP_get_x(lp, x);
+        ABORT_IF(rval, "LP_get_x failed\n");
     }
 
-    time_printf("    graph is TSP_is_graph_connected\n");
+    time_printf("    graph is connected\n");
 
     CLEANUP:
     graph_free(&G);
@@ -122,7 +146,7 @@ int TSP_find_violated_subtour_elimination_cut(
     return rval;
 }
 
-int TSP_add_subtour_elimination_cut(struct LP *lp, int deltacount, int *delta)
+int TSP_add_subtour_elimination_cut(struct LP *lp, int delta_length, int *delta)
 {
     int rval = 0;
     char sense = 'G';
@@ -132,16 +156,16 @@ int TSP_add_subtour_elimination_cut(struct LP *lp, int deltacount, int *delta)
     double *rmatval;
     int *rmatind = delta;
 
-    rmatval = (double *) malloc(deltacount * sizeof(double));
+    rmatval = (double *) malloc(delta_length * sizeof(double));
     ABORT_IF(!rmatval, "out of memory for rmatval\n");
 
-    for (int i = 0; i < deltacount; i++)
+    for (int i = 0; i < delta_length; i++)
         rmatval[i] = 1.0;
 
-    rval = lp_add_rows(lp, 1, deltacount, &rhs, &sense, &rmatbeg, rmatind,
+    rval = LP_add_rows(lp, 1, delta_length, &rhs, &sense, &rmatbeg, rmatind,
             rmatval);
 
-    ABORT_IF(rval, "lp_add_rows failed");
+    ABORT_IF(rval, "LP_add_rows failed");
 
     CLEANUP:
     if (rmatval) free(rmatval);
@@ -149,8 +173,12 @@ int TSP_add_subtour_elimination_cut(struct LP *lp, int deltacount, int *delta)
 }
 
 int TSP_is_graph_connected(
-        struct Graph *G, double *x, int *island_count, int *island_sizes,
-        int *island_start, int *island_nodes)
+        struct Graph *G,
+        double *x,
+        int *island_count,
+        int *island_sizes,
+        int *island_start,
+        int *island_nodes)
 {
     for (int i = 0; i < G->node_count; i++)
     {
@@ -180,7 +208,11 @@ int TSP_is_graph_connected(
 }
 
 int TSP_find_closest_neighbor_tour(
-        int start, int node_count, int edge_count, int *edges, int *elen,
+        int start,
+        int node_count,
+        int edge_count,
+        int *edges,
+        int *elen,
         int *path_length)
 {
     int rval;
@@ -227,10 +259,13 @@ int TSP_find_closest_neighbor_tour(
     return rval;
 }
 
-int TSP_read_problem(
-        char *filename, int *p_ncount, int *p_ecount, int **p_elist,
-        int **p_elen)
+int TSP_read_problem(char *filename, struct TSPData *data)
 {
+    int *p_ncount = &data->node_count;
+    int *p_ecount = &data->edge_count;
+    int **p_elist = &data->edge_list;
+    int **p_elen = &data->edge_weights;
+
     struct _IO_FILE *f = (struct _IO_FILE *) NULL;
     int i, j, end1, end2, w, rval = 0, ncount, ecount;
     int *elist = (int *) NULL, *elen = (int *) NULL;
@@ -246,7 +281,7 @@ int TSP_read_problem(
         }
     }
 
-    if (filename && geometric_data == 0)
+    if (filename && GEOMETRIC_DATA == 0)
     {
         if (fscanf(f, "%d %d", &ncount, &ecount) != 2)
         {
@@ -300,7 +335,7 @@ int TSP_read_problem(
         }
         else
         {
-            ncount = ncount_rand;
+            ncount = NODE_COUNT_RAND;
         }
 
         x = (double *) malloc(ncount * sizeof(double));
@@ -326,10 +361,10 @@ int TSP_read_problem(
         }
         else
         {
-            rval = CO759_build_xy(ncount, x, y, gridsize_rand);
+            rval = build_random_2d_points(ncount, x, y, GRID_SIZE_RAND);
             if (rval)
             {
-                fprintf(stderr, "CO759_build_xy failed\n");
+                fprintf(stderr, "build_random_2d_points failed\n");
                 goto CLEANUP;
             }
 
@@ -385,29 +420,28 @@ int TSP_read_problem(
     return rval;
 }
 
-int TSP_add_cutting_planes(int ncount, int ecount, int *elist, struct LP *lp)
+int TSP_add_cutting_planes(struct LP *lp, struct TSPData *data)
 {
     int rval = 0;
 
-    rval = TSP_find_violated_subtour_elimination_cut(ncount, ecount, elist, lp);
+    rval = TSP_find_violated_subtour_elimination_cut(lp, data);
     ABORT_IF (rval, "TSP_find_violated_subtour_elimination_cut failed\n");
 
     CLEANUP:
     return rval;
 }
 
-double TSP_find_initial_solution(
-        int *edge_weights, int *edge_list, int node_count, int edge_count)
+double TSP_find_initial_solution(struct TSPData *data)
 {
     double best_val = 1e99;
 
     time_printf("Finding closest neighbor tour\n");
-    for (int i = 0; i < node_count; i++)
+    for (int i = 0; i < data->node_count; i++)
     {
         int path_length = 0;
 
-        TSP_find_closest_neighbor_tour(i, node_count, edge_count, edge_list,
-                edge_weights, &path_length);
+        TSP_find_closest_neighbor_tour(i, data->node_count, data->edge_count,
+                data->edge_list, data->edge_weights, &path_length);
 
         if (best_val > path_length) best_val = path_length;
     }

@@ -7,82 +7,69 @@
 #include "tsp.h"
 #include "branch_and_cut.h"
 
-char *fname = (char *) NULL;
-int seed = 0;
-int geometric_data = 0;
-int ncount_rand = 0;
-int gridsize_rand = 100;
-int use_all_subtours = 0;
+char *INPUT_FILENAME = 0;
+unsigned int SEED = 0;
+int GEOMETRIC_DATA = 0;
+int NODE_COUNT_RAND = 0;
+int GRID_SIZE_RAND = 100;
+
+static int parse_arguments(int ac, char **av);
+
+static void print_usage(char *f);
 
 int main(int ac, char **av)
 {
     int rval = 0;
-    int *edge_weights = 0;
-    int *edge_list = 0;
-    int *tlist = 0;
 
-    seed = (int) util_get_current_time();
+    SEED = (unsigned int) get_current_time();
 
-    rval = parseargs(ac, av);
+    rval = parse_arguments(ac, av);
     ABORT_IF(rval, "Failed to parse arguments.\n");
-    ABORT_IF(!fname && !ncount_rand, "Must specify a problem file or use -k for"
-            " random prob\n");
 
-    printf("Seed = %d\n", seed);
-    srand(seed);
+    printf("Seed = %d\n", SEED);
+    srand(SEED);
 
-    if (fname)
-    {
-        printf("Problem name: %s\n", fname);
-        if (geometric_data) printf("Geometric data\n");
-    }
+    struct BNC bnc;
+    struct TSPData data;
 
-    int node_count = 0, edge_count = 0;
-    rval = TSP_read_problem(fname, &node_count, &edge_count, &edge_list,
-            &edge_weights);
+    TSP_init_data(&data);
+
+    rval = TSP_read_problem(INPUT_FILENAME, &data);
     ABORT_IF(rval, "TSP_read_problem failed\n");
-    ABORT_IF(use_all_subtours && node_count > 20, "Too many nodes to add all"
-            " subtours\n");
 
-    tlist = (int *) malloc((node_count) * sizeof(int));
+    rval = BNC_init(&bnc);
+    ABORT_IF(rval, "BNC_init failed");
 
-    ABORT_IF(!tlist, "out of memory for tlist\n");
+    bnc.best_val = TSP_find_initial_solution(&data);
+    bnc.problem_data = (void *) &data;
+    bnc.problem_init_lp = (int (*)(struct LP *, void *)) TSP_init_lp;
+    bnc.problem_add_cutting_planes =
+            (int (*)(struct LP *, void *)) TSP_add_cutting_planes;
 
-    double best_val = TSP_find_initial_solution(edge_weights, edge_list,
-            node_count, edge_count);
+    rval = BNC_init_lp(&bnc);
+    ABORT_IF(rval, "BNC_init_lp failed");
 
-    initial_time = util_get_current_time();
-
-    struct LP *lp;
-    lp = (struct LP *) malloc(sizeof(struct LP *));
-
-    rval = bnc_init_lp(lp, node_count, edge_count, edge_list, edge_weights);
-    ABORT_IF(rval, "bnc_init_lp failed\n");
-
-    rval = bnc_solve_node(lp, &best_val, node_count, edge_count, edge_list, 1);
-    ABORT_IF(rval, "bnc_solve_node failed\n");
+    rval = BNC_solve(&bnc);
+    ABORT_IF(rval, "BNC_solve_node failed\n");
 
     time_printf("Optimal integral solution:\n");
-    time_printf("    objective value = %.2lf **\n", best_val);
-
-    printf("\nRunning Time: %.2f seconds\n",
-            util_get_current_time() - initial_time);
-    fflush(stdout);
+    time_printf("    obj value = %.2lf **\n", bnc.best_val);
 
     CLEANUP:
-    if (tlist) free(tlist);
-    if (edge_list) free(edge_list);
-    if (edge_weights) free(edge_weights);
+    BNC_free(&bnc);
+    TSP_free_data(&data);
     return rval;
 }
 
-int parseargs(int ac, char **av)
+static int parse_arguments(int ac, char **av)
 {
+    int rval = 0;
+
     int c;
 
     if (ac == 1)
     {
-        usage(av[0]);
+        print_usage(av[0]);
         return 1;
     }
 
@@ -90,46 +77,49 @@ int parseargs(int ac, char **av)
     {
         switch (c)
         {
-            case 'a':
-                use_all_subtours = 1;
+            case 'a':;
                 break;
             case 'b':
-                gridsize_rand = atoi(optarg);
+                GRID_SIZE_RAND = atoi(optarg);
                 break;
             case 'g':
-                geometric_data = 1;
+                GEOMETRIC_DATA = 1;
                 break;
             case 'k':
-                ncount_rand = atoi(optarg);
+                NODE_COUNT_RAND = atoi(optarg);
                 break;
             case 's':
-                seed = atoi(optarg);
+                SEED = (unsigned) atoi(optarg);
                 break;
             case '?':
             default:
-                usage(av[0]);
+                print_usage(av[0]);
                 return 1;
         }
     }
 
-    if (optind < ac) fname = av[optind++];
+    if (optind < ac) INPUT_FILENAME = av[optind++];
 
     if (optind != ac)
     {
-        usage(av[0]);
+        print_usage(av[0]);
         return 1;
     }
 
-    return 0;
+    ABORT_IF(!INPUT_FILENAME && !NODE_COUNT_RAND,
+            "Must specify an input file or use -k for random problem\n");
+
+    CLEANUP:
+    return rval;
 }
 
-void usage(char *f)
+static void print_usage(char *f)
 {
     fprintf(stderr, "Usage: %s [-see below-] [prob_file]\n"
             "   -a    add all subtours cuts at once\n"
             "   -b d  gridsize d for random problems\n"
             "   -g    prob_file has x-y coordinates\n"
             "   -k d  generate problem with d cities\n"
-            "   -s d  random seed\n", f);
+            "   -s d  random SEED\n", f);
 }
 

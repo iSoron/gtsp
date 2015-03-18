@@ -55,7 +55,7 @@ int graph_build(int node_count, int edge_count, int *edge_list, struct Graph *G)
             (struct AdjObj *) malloc(2 * edge_count * sizeof(struct AdjObj));
 
     ABORT_IF(!G->node_list, "could not allocate G->node_list\n");
-    ABORT_IF(!G->adj_space, "out of memory for node_list or adj_space\n");
+    ABORT_IF(!G->adj_space, "could not allocate G->adj_space\n");
 
     for (int i = 0; i < node_count; i++)
         G->node_list[i].deg = 0;
@@ -109,8 +109,13 @@ int euclid_edgelen(int i, int j, double *x, double *y)
 }
 
 void get_delta(
-        int island_node_count, int *island_nodes, int edge_count, int *edges,
-        int *delta_count, int *delta, int *marks)
+        int island_node_count,
+        int *island_nodes,
+        int edge_count,
+        int *edges,
+        int *delta_count,
+        int *delta,
+        int *marks)
 {
     for (int i = 0; i < island_node_count; i++)
         marks[island_nodes[i]] = 1;

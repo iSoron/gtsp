@@ -1,17 +1,18 @@
-#ifndef __CO759_UTIL_H
-#define __CO759_UTIL_H
+#ifndef _PROJECT_UTIL_H_
+#define _PROJECT_UTIL_H_
 
 #define ABORT_IF(cond, msg) if(cond) { \
     fprintf(stderr, msg); rval = 1; goto CLEANUP; }
 
-double util_get_current_time(void);
+double get_current_time(void);
 
-int CO759_build_xy(int ncount, double *xlist, double *ylist, int gridsize);
+int build_random_2d_points
+        (int node_count, double *x_list, double *y_list, int grid_size);
 
-double util_get_current_time(void);
+double get_current_time(void);
 
 void time_printf(const char *fmt, ...);
 
-void next_set(int sz, int *Set);
+void next_set(int sz, int *set);
 
-#endif  /* __CO759_UTIL_H */
+#endif

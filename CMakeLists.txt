@@ -8,7 +8,6 @@ set(CMAKE_SOURCE_DIR src)
 
 set(CMAKE_C_FLAGS "-O3 -g -Wall -pedantic -g --std=c11 -Winline")
 
-
 set(SOURCE_FILES
     src/lp.c
     src/lp.h
