@@ -131,9 +131,7 @@ int LP_optimize(struct LP *lp, int *infeasible)
     solstat = CPXgetstat(lp->cplex_env, lp->cplex_lp);
     if (solstat == CPX_STAT_INFEASIBLE)
     {
-        if (infeasible)
-            *infeasible = 1;
-
+        *infeasible = 1;
     }
     else
     {
