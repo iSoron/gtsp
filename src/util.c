@@ -19,14 +19,14 @@ double get_real_time()
     return (double) time (0);
 }
 
-static double initial_time = 0;
+static double INITIAL_TIME = 0;
 
 void time_printf(const char *fmt, ...)
 {
-    if (initial_time == 0)
-        initial_time = get_current_time();
+    if (INITIAL_TIME == 0)
+        INITIAL_TIME = get_current_time();
 
-    printf("[%10.2lf] ", get_current_time() - initial_time);
+    printf("[%10.2lf] ", get_current_time() - INITIAL_TIME);
 
     va_list args;
     va_start(args, fmt);

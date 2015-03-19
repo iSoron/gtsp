@@ -26,7 +26,7 @@ int BNC_init(struct BNC *bnc)
     bnc->best_obj_val = 0;
 
     bnc->lp = (struct LP *) malloc(sizeof(struct LP));
-    ABORT_IF(!bnc->lp, "could not allocate bnc->lp\n");
+    abort_if(!bnc->lp, "could not allocate bnc->lp");
 
     CLEANUP:
     return rval;
@@ -45,19 +45,19 @@ void BNC_free(struct BNC *bnc)
 int BNC_init_lp(struct BNC *bnc)
 {
     int rval = 0;
-    time_printf("Initializing LP...\n");
+    log_verbose("Initializing LP...\n");
 
     rval = LP_open(bnc->lp);
-    ABORT_IF(rval, "LP_open failed\n");
+    abort_if(rval, "LP_open failed");
 
     rval = LP_create(bnc->lp, "subtour");
-    ABORT_IF(rval, "LP_create failed\n");
+    abort_if(rval, "LP_create failed");
 
     rval = bnc->problem_init_lp(bnc->lp, bnc->problem_data);
-    ABORT_IF(rval, "problem_init_lp failed\n");
+    abort_if(rval, "problem_init_lp failed");
 
     rval = LP_write(bnc->lp, "subtour.lp");
-    ABORT_IF(rval, "LP_write failed\n");
+    abort_if(rval, "LP_write failed");
 
     CLEANUP:
     return rval;
@@ -76,27 +76,27 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     int rval = 0;
     double *x = (double *) NULL;
 
-    time_printf("Optimizing...\n");
+    log_verbose("Optimizing...\n");
 
     int is_infeasible;
     rval = LP_optimize(lp, &is_infeasible);
-    ABORT_IF (rval, "LP_optimize failed\n");
+    abort_if(rval, "LP_optimize failed\n");
 
     if (is_infeasible)
     {
-        time_printf("Branch pruned by infeasibility.\n");
+        log_verbose("Branch pruned by infeasibility.\n");
         goto CLEANUP;
     }
 
     double objval;
     rval = LP_get_obj_val(lp, &objval);
-    ABORT_IF (rval, "LP_get_obj_val failed\n");
+    abort_if(rval, "LP_get_obj_val failed\n");
 
-    time_printf("    objective value = %.2f\n", objval);
+    log_verbose("    objective value = %.2f\n", objval);
 
     if (objval > *best_val)
     {
-        time_printf("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
+        log_verbose("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
                 *best_val);
         rval = 0;
         goto CLEANUP;
@@ -105,29 +105,29 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     int num_cols = LP_get_num_cols(lp);
 
     x = (double *) malloc(num_cols * sizeof(double));
-    ABORT_IF(!x, "could not allocate x\n");
+    abort_if(!x, "could not allocate x");
 
     rval = LP_get_x(lp, x);
-    ABORT_IF(rval, "LP_get_x failed\n");
+    abort_if(rval, "LP_get_x failed");
 
     if (bnc->problem_add_cutting_planes)
     {
         rval = bnc->problem_add_cutting_planes(lp, bnc->problem_data);
-        ABORT_IF(rval, "problem_add_cutting_planes failed\n");
+        abort_if(rval, "problem_add_cutting_planes failed");
     }
 
     rval = LP_optimize(lp, &is_infeasible);
-    ABORT_IF (rval, "LP_optimize failed\n");
+    abort_if(rval, "LP_optimize failed\n");
 
     rval = LP_get_obj_val(lp, &objval);
-    ABORT_IF(rval, "LP_get_obj_val failed\n");
+    abort_if(rval, "LP_get_obj_val failed");
 
     rval = LP_get_x(lp, x);
-    ABORT_IF(rval, "LP_get_x failed\n");
+    abort_if(rval, "LP_get_x failed");
 
     if (BNC_is_integral(x, num_cols))
     {
-        time_printf("    solution is integral\n");
+        log_verbose("    solution is integral\n");
 
         if (objval < *best_val)
         {
@@ -135,15 +135,15 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
             bnc->best_x = x;
             x = 0;
 
-            time_printf("Found a better integral solution:\n");
-            time_printf("    objval = %.2lf **\n", objval);
+            log_info("Found a better integral solution:\n");
+            log_info("    objval = %.2lf **\n", objval);
         }
     }
     else
     {
-        time_printf("    solution is fractional\n");
+        log_verbose("    solution is fractional\n");
         rval = BNC_branch_node(bnc, x, depth);
-        ABORT_IF(rval, "BNC_branch_node failed\n");
+        abort_if(rval, "BNC_branch_node failed");
     }
 
     CLEANUP:
@@ -160,30 +160,30 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
     int num_cols = LP_get_num_cols(lp);
     int best_branch_var = BNC_find_best_branching_var(x, num_cols);
 
-    time_printf("Branching on variable x%d = %.6lf (depth %d)...\n",
+    log_verbose("Branching on variable x%d = %.6lf (depth %d)...\n",
             best_branch_var, x[best_branch_var], depth);
 
-    time_printf("Fixing variable x%d to one...\n", best_branch_var);
+    log_verbose("Fixing variable x%d to one...\n", best_branch_var);
     rval = LP_change_bound(lp, best_branch_var, 'L', 1.0);
-    ABORT_IF(rval, "LP_change_bound failed\n");
+    abort_if(rval, "LP_change_bound failed");
 
     rval = BNC_solve_node(bnc, depth + 1);
-    ABORT_IF(rval, "BNC_solve_node failed\n");
+    abort_if(rval, "BNC_solve_node failed");
 
     rval = LP_change_bound(lp, best_branch_var, 'L', 0.0);
-    ABORT_IF(rval, "LP_change_bound failed\n");
+    abort_if(rval, "LP_change_bound failed");
 
-    time_printf("Fixing variable x%d to zero...\n", best_branch_var);
+    log_verbose("Fixing variable x%d to zero...\n", best_branch_var);
     rval = LP_change_bound(lp, best_branch_var, 'U', 0.0);
-    ABORT_IF(rval, "LP_change_bound failed\n");
+    abort_if(rval, "LP_change_bound failed");
 
     rval = BNC_solve_node(bnc, depth + 1);
-    ABORT_IF(rval, "BNC_solve_node failed\n");
+    abort_if(rval, "BNC_solve_node failed");
 
     rval = LP_change_bound(lp, best_branch_var, 'U', 1.0);
-    ABORT_IF(rval, "LP_change_bound failed\n");
+    abort_if(rval, "LP_change_bound failed");
 
-    time_printf("Finished branching on variable %d\n", best_branch_var);
+    log_verbose("Finished branching on variable %d\n", best_branch_var);
 
     CLEANUP:
     return rval;

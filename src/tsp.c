@@ -35,7 +35,7 @@ int TSP_init_lp(struct LP *lp, struct TSPData *data)
     for (int i = 0; i < node_count; i++)
     {
         rval = LP_new_row(lp, 'E', 2.0);
-        ABORT_IF(rval, "LP_new_row failed\n");
+        abort_if(rval, "LP_new_row failed");
     }
 
     /* Build a column for each edge of the graph */
@@ -51,7 +51,7 @@ int TSP_init_lp(struct LP *lp, struct TSPData *data)
         rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
                 &ub);
 
-        ABORT_IF(rval, "LP_add_cols failed\n");
+        abort_if(rval, "LP_add_cols failed");
     }
 
     CLEANUP:
@@ -80,31 +80,31 @@ int TSP_find_violated_subtour_elimination_cut(
     graph_init(&G);
 
     rval = LP_optimize(lp, &is_infeasible);
-    ABORT_IF(rval, "LP_optimize failed\n");
-    ABORT_IF(is_infeasible, "LP is infeasible\n");
+    abort_if(rval, "LP_optimize failed");
+    abort_if(is_infeasible, "LP is infeasible");
 
     rval = graph_build(ncount, edge_count, edges, &G);
-    ABORT_IF(rval, "graph_build failed\n");
+    abort_if(rval, "graph_build failed");
 
     x = (double *) malloc(edge_count * sizeof(double));
     delta = (int *) malloc(edge_count * sizeof(int));
     marks = (int *) malloc(ncount * sizeof(int));
-    ABORT_IF(!x, "Could not allocate memory for x");
-    ABORT_IF(!delta, "Could not allocate memory for delta");
-    ABORT_IF(!marks, "Could not allocate memory for marks");
+    abort_if(!x, "Could not allocate memory for x");
+    abort_if(!delta, "Could not allocate memory for delta");
+    abort_if(!marks, "Could not allocate memory for marks");
 
     island_nodes = (int *) malloc(ncount * sizeof(int));
     island_start = (int *) malloc(ncount * sizeof(int));
     island_sizes = (int *) malloc(ncount * sizeof(int));
-    ABORT_IF(!island_nodes, "Could not allocate memory for island_nodes");
-    ABORT_IF(!island_start, "Could not allocate memory for island_start");
-    ABORT_IF(!island_sizes, "Could not allocate memory for island_sizes");
+    abort_if(!island_nodes, "Could not allocate memory for island_nodes");
+    abort_if(!island_start, "Could not allocate memory for island_start");
+    abort_if(!island_sizes, "Could not allocate memory for island_sizes");
 
     for (int i = 0; i < ncount; i++)
         marks[i] = 0;
 
     rval = LP_get_x(lp, x);
-    ABORT_IF(rval, "LP_get_x failed\n");
+    abort_if(rval, "LP_get_x failed");
 
     int round = 0;
     int delta_count = 0;
@@ -113,7 +113,7 @@ int TSP_find_violated_subtour_elimination_cut(
     while (!TSP_is_graph_connected(&G, x, &island_count, island_sizes,
             island_start, island_nodes))
     {
-        time_printf("Adding %d BNC_solve_node inequalities...\n", island_count);
+        log_verbose("Adding %d BNC_solve_node inequalities...\n", island_count);
         for (int i = 0; i < island_count; i++)
         {
             get_delta(island_sizes[i], island_nodes + island_start[i],
@@ -122,23 +122,23 @@ int TSP_find_violated_subtour_elimination_cut(
             rval = TSP_add_subtour_elimination_cut(lp, delta_count, delta);
         }
 
-        time_printf("Reoptimizing (round %d)...\n", ++round);
-        ABORT_IF(rval, "TSP_add_subtour_elimination_cut failed");
+        log_verbose("Reoptimizing (round %d)...\n", ++round);
+        abort_if(rval, "TSP_add_subtour_elimination_cut failed");
 
         rval = LP_optimize(lp, &is_infeasible);
-        ABORT_IF(rval, "LP_optimize failed\n");
+        abort_if(rval, "LP_optimize failed");
 
         if(is_infeasible) goto CLEANUP;
 
         double objval = 0;
         rval = LP_get_obj_val(lp, &objval);
-        ABORT_IF(rval, "LP_get_obj_val failed\n");
+        abort_if(rval, "LP_get_obj_val failed");
 
         rval = LP_get_x(lp, x);
-        ABORT_IF(rval, "LP_get_x failed\n");
+        abort_if(rval, "LP_get_x failed");
     }
 
-    time_printf("    graph is connected\n");
+    log_verbose("    graph is connected\n");
 
     CLEANUP:
     graph_free(&G);
@@ -160,7 +160,7 @@ int TSP_add_subtour_elimination_cut(struct LP *lp, int delta_length, int *delta)
     int *rmatind = delta;
 
     rmatval = (double *) malloc(delta_length * sizeof(double));
-    ABORT_IF(!rmatval, "out of memory for rmatval\n");
+    abort_if(!rmatval, "out of memory for rmatval");
 
     for (int i = 0; i < delta_length; i++)
         rmatval[i] = 1.0;
@@ -168,7 +168,7 @@ int TSP_add_subtour_elimination_cut(struct LP *lp, int delta_length, int *delta)
     rval = LP_add_rows(lp, 1, delta_length, &rhs, &sense, &rmatbeg, rmatind,
             rmatval);
 
-    ABORT_IF(rval, "LP_add_rows failed");
+    abort_if(rval, "LP_add_rows failed");
 
     CLEANUP:
     if (rmatval) free(rmatval);
@@ -225,7 +225,7 @@ int TSP_find_closest_neighbor_tour(
     graph_init(&G);
 
     rval = graph_build(node_count, edge_count, edges, &G);
-    ABORT_IF(rval, "graph_build failed\n");
+    abort_if(rval, "graph_build failed");
 
     for (int j = 0; j < node_count; j++)
         G.node_list[j].mark = 0;
@@ -380,7 +380,7 @@ int TSP_read_problem(char *filename, struct TSPData *data)
         }
 
         edge_count = (node_count * (node_count - 1)) / 2;
-        time_printf("Complete graph: %d nodes, %d edges\n", node_count,
+        log_verbose("Complete graph: %d nodes, %d edges\n", node_count,
                 edge_count);
 
         edge_list = (int *) malloc(2 * edge_count * sizeof(int));
@@ -429,7 +429,7 @@ int TSP_add_cutting_planes(struct LP *lp, struct TSPData *data)
     int rval = 0;
 
     rval = TSP_find_violated_subtour_elimination_cut(lp, data);
-    ABORT_IF (rval, "TSP_find_violated_subtour_elimination_cut failed\n");
+    abort_if (rval, "TSP_find_violated_subtour_elimination_cut failed\n");
 
     CLEANUP:
     return rval;
@@ -439,7 +439,7 @@ double TSP_find_initial_solution(struct TSPData *data)
 {
     double best_val = 1e99;
 
-    time_printf("Finding closest neighbor tour\n");
+    log_verbose("Finding closest neighbor tour\n");
     for (int i = 0; i < data->node_count; i++)
     {
         int path_length = 0;
@@ -450,7 +450,7 @@ double TSP_find_initial_solution(struct TSPData *data)
         if (best_val > path_length) best_val = path_length;
     }
 
-    time_printf("    length = %lf\n", best_val);
+    log_verbose("    length = %lf\n", best_val);
 
     return best_val;
 }

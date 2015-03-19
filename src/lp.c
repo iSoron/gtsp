@@ -40,13 +40,13 @@ int LP_create(struct LP *lp, const char *name)
     int rval = 0;
     char nambuf[MAX_NAME_LENGTH];
 
-    ABORT_IF(!lp->cplex_env, "cplex_env is null\n");
+    abort_if(!lp->cplex_env, "cplex_env is null");
 
     strncpy(nambuf, name, MAX_NAME_LENGTH);
     nambuf[MAX_NAME_LENGTH - 1] = '\0';
 
     lp->cplex_lp = CPXcreateprob(lp->cplex_env, &rval, nambuf);
-    ABORT_IF(rval, "CPXcreateprob failed\n");
+    abort_if(rval, "CPXcreateprob failed");
 
     CLEANUP:
     return rval;
@@ -58,7 +58,7 @@ int LP_new_row(struct LP *lp, char sense, double rhs)
 
     rval = CPXnewrows(lp->cplex_env, lp->cplex_lp, 1, &rhs, &sense, 0, 0);
 
-    ABORT_IF(rval, "CPXnewrows failed\n");
+    abort_if(rval, "CPXnewrows failed");
 
     CLEANUP:
     return rval;
@@ -79,7 +79,7 @@ int LP_add_rows(
     rval = CPXaddrows(lp->cplex_env, lp->cplex_lp, 0, newrows, newnz, rhs,
             sense, rmatbeg, rmatind, rmatval, 0, 0);
 
-    ABORT_IF(rval, "CPXaddrows failed\n");
+    abort_if(rval, "CPXaddrows failed");
 
     CLEANUP:
     return rval;
@@ -101,7 +101,7 @@ int LP_add_cols(
     rval = CPXaddcols(lp->cplex_env, lp->cplex_lp, newcols, newnz, obj, cmatbeg,
             cmatind, cmatval, lb, ub, (char **) NULL);
 
-    ABORT_IF(rval, "CPXaddcols failed\n");
+    abort_if(rval, "CPXaddcols failed");
 
     CLEANUP:
     return rval;
@@ -113,7 +113,7 @@ int LP_change_bound(struct LP *lp, int col, char lower_or_upper, double bnd)
 
     rval = CPXchgbds(lp->cplex_env, lp->cplex_lp, 1, &col, &lower_or_upper,
             &bnd);
-    ABORT_IF(rval, "CPXchgbds failed\n");
+    abort_if(rval, "CPXchgbds failed");
 
     CLEANUP:
     return rval;
@@ -126,7 +126,7 @@ int LP_optimize(struct LP *lp, int *infeasible)
     *infeasible = 0;
 
     rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
-    ABORT_IF(rval, "CPXdualopt failed\n");
+    abort_if(rval, "CPXdualopt failed");
 
     solstat = CPXgetstat(lp->cplex_env, lp->cplex_lp);
     if (solstat == CPX_STAT_INFEASIBLE)
@@ -135,7 +135,7 @@ int LP_optimize(struct LP *lp, int *infeasible)
     }
     else
     {
-        ABORT_IF(solstat != CPX_STAT_OPTIMAL
+        abort_if(solstat != CPX_STAT_OPTIMAL
                 && solstat != CPX_STAT_OPTIMAL_INFEAS,
                 "Invalid solution status");
     }
@@ -149,7 +149,7 @@ int LP_get_obj_val(struct LP *lp, double *obj)
     int rval = 0;
 
     rval = CPXgetobjval(lp->cplex_env, lp->cplex_lp, obj);
-    ABORT_IF(rval, "CPXgetobjval failed\n");
+    abort_if(rval, "CPXgetobjval failed");
 
     CLEANUP:
     return rval;
@@ -160,10 +160,10 @@ int LP_get_x(struct LP *lp, double *x)
     int rval = 0;
 
     int ncols = CPXgetnumcols(lp->cplex_env, lp->cplex_lp);
-    ABORT_IF(!ncols, "No columns in LP\n");
+    abort_if(!ncols, "No columns in LP");
 
     rval = CPXgetx(lp->cplex_env, lp->cplex_lp, x, 0, ncols - 1);
-    ABORT_IF(rval, "CPXgetx failed\n");
+    abort_if(rval, "CPXgetx failed");
 
     CLEANUP:
     return rval;
@@ -183,7 +183,7 @@ int LP_write(struct LP *lp, const char *fname)
     nambuf[MAX_NAME_LENGTH - 1] = '\0';
 
     rval = CPXwriteprob(lp->cplex_env, lp->cplex_lp, nambuf, "RLP");
-    ABORT_IF(rval, "CPXwriteprob failed\n");
+    abort_if(rval, "CPXwriteprob failed");
 
     CLEANUP:
     return rval;

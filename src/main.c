@@ -29,19 +29,19 @@ int main_tsp(int ac, char **av)
     struct TSPData data;
 
     rval = TSP_init_data(&data);
-    ABORT_IF(rval, "TSP_init_data failed");
+    abort_if(rval, "TSP_init_data failed");
 
     rval = BNC_init(&bnc);
-    ABORT_IF(rval, "BNC_init failed");
+    abort_if(rval, "BNC_init failed");
 
     rval = parse_arguments_tsp(ac, av);
-    ABORT_IF(rval, "Failed to parse arguments.\n");
+    abort_if(rval, "Failed to parse arguments.");
 
     printf("Seed = %d\n", SEED);
     srand(SEED);
 
     rval = TSP_read_problem(INPUT_FILENAME, &data);
-    ABORT_IF(rval, "TSP_read_problem failed\n");
+    abort_if(rval, "TSP_read_problem failed");
 
     bnc.best_obj_val = TSP_find_initial_solution(&data);
     bnc.problem_data = (void *) &data;
@@ -50,13 +50,13 @@ int main_tsp(int ac, char **av)
             (int (*)(struct LP *, void *)) TSP_add_cutting_planes;
 
     rval = BNC_init_lp(&bnc);
-    ABORT_IF(rval, "BNC_init_lp failed");
+    abort_if(rval, "BNC_init_lp failed");
 
     rval = BNC_solve(&bnc);
-    ABORT_IF(rval, "BNC_solve_node failed\n");
+    abort_if(rval, "BNC_solve_node failed");
 
-    time_printf("Optimal integral solution:\n");
-    time_printf("    obj value = %.2lf **\n", bnc.best_obj_val);
+    log_info("Optimal integral solution:\n");
+    log_info("    obj value = %.2lf **\n", bnc.best_obj_val);
 
     CLEANUP:
     BNC_free(&bnc);
@@ -79,19 +79,19 @@ int main_gtsp(int ac, char **av)
     struct GTSP data;
 
     rval = GTSP_init_data(&data);
-    ABORT_IF(rval, "GTSP_init_data failed");
+    abort_if(rval, "GTSP_init_data failed");
 
     rval = GTSP_create_random_problem(node_count, cluster_count, grid_size,
             &data);
-    ABORT_IF(rval, "GTSP_create_random_problem failed");
+    abort_if(rval, "GTSP_create_random_problem failed");
 
     rval = GTSP_write_data(&data, "gtsp.in");
-    ABORT_IF(rval, "GTSP_write_problem failed\n");
+    abort_if(rval, "GTSP_write_problem failed");
 
     rval = BNC_init(&bnc);
-    ABORT_IF(rval, "BNC_init failed\n");
+    abort_if(rval, "BNC_init failed");
 
-    printf("Seed = %d\n", SEED);
+    log_info("Setting seed = %d\n", SEED);
     srand(SEED);
 
     bnc.best_obj_val = DBL_MAX;
@@ -99,16 +99,17 @@ int main_gtsp(int ac, char **av)
     bnc.problem_init_lp = (int (*)(struct LP *, void *)) GTSP_init_lp;
 
     rval = BNC_init_lp(&bnc);
-    ABORT_IF(rval, "BNC_init_lp failed\n");
+    abort_if(rval, "BNC_init_lp failed");
 
+    log_info("Starting branch-and-cut solver...\n");
     rval = BNC_solve(&bnc);
-    ABORT_IF(rval, "BNC_solve_node failed\n");
+    abort_if(rval, "BNC_solve_node failed");
 
-    time_printf("Optimal integral solution:\n");
-    time_printf("    obj value = %.2lf **\n", bnc.best_obj_val);
+    log_info("Optimal integral solution:\n");
+    log_info("    obj value = %.2lf **\n", bnc.best_obj_val);
 
     rval = GTSP_write_solution(&data, "gtsp.out", bnc.best_x);
-    ABORT_IF(rval, "GTSP_write_solution failed");
+    abort_if(rval, "GTSP_write_solution failed");
 
     CLEANUP:
     GTSP_free(&data);
@@ -162,7 +163,7 @@ static int parse_arguments_tsp(int ac, char **av)
         return 1;
     }
 
-    ABORT_IF(!INPUT_FILENAME && !NODE_COUNT_RAND,
+    abort_if(!INPUT_FILENAME && !NODE_COUNT_RAND,
             "Must specify an input file or use -k for random problem\n");
 
     CLEANUP:

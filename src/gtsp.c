@@ -40,17 +40,17 @@ int GTSP_create_random_problem(
 
     edges = (struct Edge *) malloc(edge_count * sizeof(struct Edge));
     clusters = (int *) malloc(node_count * sizeof(int));
-    ABORT_IF (!edges, "could not allocate data->edges\n");
-    ABORT_IF (!clusters, "could not allocate clusters\n");
+    abort_if(!edges, "could not allocate data->edges\n");
+    abort_if(!clusters, "could not allocate clusters\n");
 
     x_coords = (double *) malloc(node_count * sizeof(double));
     y_coords = (double *) malloc(node_count * sizeof(double));
-    ABORT_IF (!x_coords, "could not allocate x_coords\n");
-    ABORT_IF (!y_coords, "could not allocate y_coords\n");
+    abort_if(!x_coords, "could not allocate x_coords\n");
+    abort_if(!y_coords, "could not allocate y_coords\n");
 
     rval = generate_random_clusters_2d(node_count, cluster_count, grid_size,
             x_coords, y_coords, clusters);
-    ABORT_IF(rval, "generate_random_clusters_2d failed");
+    abort_if(rval, "generate_random_clusters_2d failed");
 
     int current_edge = 0;
     for (int i = 0; i < edge_count; i++)
@@ -94,13 +94,13 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
     for (int i = 0; i < node_count; i++)
     {
         rval = LP_new_row(lp, 'E', 0.0);
-        ABORT_IF(rval, "LP_new_row failed");
+        abort_if(rval, "LP_new_row failed");
     }
 
     for (int i = 0; i < cluster_count; i++)
     {
         rval = LP_new_row(lp, 'E', 1.0);
-        ABORT_IF(rval, "LP_new_row failed");
+        abort_if(rval, "LP_new_row failed");
     }
 
     double lb = 0.0;
@@ -115,7 +115,7 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
 
         rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
                 &ub);
-        ABORT_IF(rval, "LP_add_cols failed");
+        abort_if(rval, "LP_add_cols failed");
     }
 
     for (int i = 0; i < edge_count; i++)
@@ -126,7 +126,7 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
 
         rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
                 &ub);
-        ABORT_IF(rval, "LP_add_cols failed");
+        abort_if(rval, "LP_add_cols failed");
     }
 
     CLEANUP:
@@ -140,7 +140,7 @@ int GTSP_write_data(struct GTSP *data, char *filename)
     FILE *file;
 
     file = fopen(filename, "w");
-    ABORT_IF(!file, "could not open file");
+    abort_if(!file, "could not open file");
 
     fprintf(file, "%d %d\n", data->node_count, data->cluster_count);
 
@@ -164,7 +164,7 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
 
     FILE *file;
     file = fopen(filename, "w");
-    ABORT_IF(!file, "could not open file");
+    abort_if(!file, "could not open file");
 
     int positive_edge_count = 0;
     for (int i = 0; i < data->edge_count; i++)

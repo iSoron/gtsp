@@ -53,8 +53,8 @@ int graph_build(int node_count, int edge_count, int *edge_list, struct Graph *G)
     G->adj_space =
             (struct AdjObj *) malloc(2 * edge_count * sizeof(struct AdjObj));
 
-    ABORT_IF(!G->node_list, "could not allocate G->node_list\n");
-    ABORT_IF(!G->adj_space, "could not allocate G->adj_space\n");
+    abort_if(!G->node_list, "could not allocate G->node_list");
+    abort_if(!G->adj_space, "could not allocate G->adj_space");
 
     for (int i = 0; i < node_count; i++)
         G->node_list[i].deg = 0;

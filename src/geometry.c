@@ -17,13 +17,13 @@ int generate_random_points_2d(
     int **hit = 0, *hit_count = 0;
 
     hit = (int **) malloc(grid_size * sizeof(int *));
-    ABORT_IF (!hit, "out of memory for hit\n");
+    abort_if(!hit, "could not allocate hit");
 
     for (i = 0; i < grid_size; i++)
         hit[i] = 0;
 
     hit_count = (int *) malloc(grid_size * sizeof(int));
-    ABORT_IF(!hit_count, "out of memory for hit_count\n");
+    abort_if(!hit_count, "could not allocate hit_count");
 
     for (i = 0; i < grid_size; i++)
         hit_count[i] = 0;
@@ -44,7 +44,7 @@ int generate_random_points_2d(
             {
                 void *tmp_ptr = (void *) hit[x];
                 tmp_ptr = realloc(tmp_ptr, (hit_count[x] + 1) * sizeof(int));
-                ABORT_IF (!tmp_ptr, "could not reallocate hit_count\n");
+                abort_if(!tmp_ptr, "could not reallocate hit_count");
 
                 hit[x] = (int *) tmp_ptr;
                 hit[x][hit_count[x]] = y;
@@ -82,7 +82,7 @@ int generate_random_clusters_2d(
 
     rval = generate_random_points_2d(node_count, grid_size, x_coordinates,
             y_coordinates);
-    ABORT_IF(rval, "generate_random_points_2d failed");
+    abort_if(rval, "generate_random_points_2d failed");
 
     for (int i = 0; i < cluster_count; i++)
         clusters[i] = i;
