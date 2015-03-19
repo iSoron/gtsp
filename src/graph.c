@@ -1,5 +1,4 @@
 #include <malloc.h>
-#include <math.h>
 #include "main.h"
 #include "graph.h"
 #include "util.h"
@@ -100,12 +99,6 @@ int graph_build(int node_count, int edge_count, int *edge_list, struct Graph *G)
         if (G->adj_space) free(G->adj_space);
     }
     return rval;
-}
-
-int euclid_edgelen(int i, int j, double *x, double *y)
-{
-    double t1 = x[i] - x[j], t2 = y[i] - y[j];
-    return (int) (sqrt(t1 * t1 + t2 * t2) + 0.5);
 }
 
 void get_delta(

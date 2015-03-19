@@ -6,10 +6,7 @@
 
 double get_current_time(void);
 
-int build_random_2d_points
-        (int node_count, double *x_list, double *y_list, int grid_size);
-
-double get_current_time(void);
+double get_real_time();
 
 void time_printf(const char *fmt, ...);
 

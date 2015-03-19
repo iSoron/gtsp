@@ -37,8 +37,6 @@ void graph_free(struct Graph *G);
 int graph_build
         (int node_count, int edge_count, int *edge_list, struct Graph *G);
 
-int euclid_edgelen(int i, int j, double *x, double *y);
-
 void get_delta(
         int nsize,
         int *nlist,

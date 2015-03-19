@@ -1,10 +1,10 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <sys/resource.h>
 #include <stdarg.h>
+#include <time.h>
 #include "util.h"
 
-double get_current_time(void)
+double get_current_time()
 {
     struct rusage ru;
 
@@ -14,88 +14,9 @@ double get_current_time(void)
             + ((double) ru.ru_utime.tv_usec) / 1000000.0;
 }
 
-/* function for creating a random set of points in unit square */
-
-int build_random_2d_points(
-        int node_count, double *x_list, double *y_list, int grid_size)
+double get_real_time()
 {
-    int rval = 0, i, j, winner, x, y;
-    int **hit = (int **) NULL, *hitcount = (int *) NULL;
-
-    printf("Random %d point set, grid_size = %d\n", node_count, grid_size);
-    fflush(stdout);
-
-    hit = (int **) malloc(grid_size * sizeof(int *));
-    if (!hit)
-    {
-        fprintf(stderr, "out of memory for hit\n");
-        rval = 1;
-        goto CLEANUP;
-    }
-    for (i = 0; i < grid_size; i++) hit[i] = (int *) NULL;
-
-    hitcount = (int *) malloc(grid_size * sizeof(int));
-    if (!hitcount)
-    {
-        fprintf(stderr, "out of memory for hitcount\n");
-        rval = 1;
-        goto CLEANUP;
-    }
-    for (i = 0; i < grid_size; i++) hitcount[i] = 0;
-
-    for (i = 0; i < node_count; i++)
-    {
-        winner = 0;
-        do
-        {
-            x = (int) (rand() % grid_size);
-            y = (int) (rand() % grid_size);
-
-            /* check to see if (x,y) is a duplicate point */
-
-            for (j = 0; j < hitcount[x]; j++)
-            {
-                if (hit[x][j] == y) break;
-            }
-            if (j == hitcount[x])
-            {
-                void *tmp_ptr = (void *) hit[x];
-                tmp_ptr = realloc(tmp_ptr, (hitcount[x] + 1) * sizeof(int));
-                if (!tmp_ptr)
-                {
-                    fprintf(stderr, "out of member in realloc of hit\n");
-                    rval = 1;
-                    goto CLEANUP;
-                }
-                hit[x] = (int *) tmp_ptr;
-                hit[x][hitcount[x]] = y;
-                hitcount[x]++;
-                winner = 1;
-            }
-            if (!winner)
-            {
-                printf("X");
-                fflush(stdout);
-            }
-        } while (!winner);
-        x_list[i] = (double) x;
-        y_list[i] = (double) y;
-    }
-
-    CLEANUP:
-
-    printf("\n");
-
-    if (hit)
-    {
-        for (i = 0; i < grid_size; i++)
-        {
-            if (hit[i]) free(hit[i]);
-        }
-        free(hit);
-    }
-    if (hitcount) free(hitcount);
-    return rval;
+    return (double) time (0);
 }
 
 static double initial_time = 0;
