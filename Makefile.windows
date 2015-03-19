@@ -1,0 +1,36 @@
+path   := src/*/*.c src/*.c src/*.s
+include:= src/*.h
+binary := bin/hw2.exe
+
+source := $(wildcard ${path})
+headers:= $(wildcard ${include})
+obj    := $(patsubst src/%, bin/%, $(patsubst %.c,%.o, $(patsubst %.s,%.s.o, $(source))))
+
+CPLEX_INCLUDE = /cygdrive/c/Program\ Files/IBM/ILOG/CPLEX_Studio1261/cplex/include/ilcplex
+CPLEX_LIB = /cygdrive/c/Program\ Files/IBM/ILOG/CPLEX_Studio1261/cplex/bin/x64_win64
+
+flags  := -O3 -g -Wall -pedantic -g --std=c11 -Winline -I$(CPLEX_INCLUDE)
+libs   := -L$(CPLEX_LIB) -lcplex1261 -lm -lpthread
+
+compile: $(obj) $(binary)
+
+run: compile
+	@$(binary)
+
+bin/%.s.o: src/%.s
+	@echo '    as  $<'
+	@$(AS) $< -o $@
+
+bin/%.o: src/%.c $(headers)
+	@mkdir -p bin
+	@echo '    cc  $<'
+	@$(CC) -c $(flags) $< -o $@
+
+$(binary): $(obj)
+	@mkdir -p bin
+	@echo '    ld  $@'
+	@$(CC) $(flags) $(obj) $(libs) -o $@
+	
+clean:
+	@$(RM) -f $(obj) $(binary)
+	

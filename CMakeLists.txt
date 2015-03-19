@@ -22,6 +22,6 @@ set(SOURCE_FILES
     src/branch_and_cut.h
     src/branch_and_cut.c)
 
-add_executable(project ${SOURCE_FILES} )
+add_executable(project ${SOURCE_FILES} src/gtsp.h src/gtsp.c src/geometry.h src/geometry.c)
 
 target_link_libraries(project cplex m pthread)
