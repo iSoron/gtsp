@@ -3,6 +3,7 @@
 #include "main.h"
 #include "tsp.h"
 #include "util.h"
+#include "geometry.h"
 
 int TSP_init_data(struct TSPData *data)
 {
@@ -16,6 +17,7 @@ int TSP_init_data(struct TSPData *data)
 
 void TSP_free_data(struct TSPData *data)
 {
+    if(!data) return;
     if (data->edge_list) free(data->edge_list);
     if (data->edge_weights) free(data->edge_weights);
 }
@@ -125,7 +127,8 @@ int TSP_find_violated_subtour_elimination_cut(
 
         rval = LP_optimize(lp, &is_infeasible);
         ABORT_IF(rval, "LP_optimize failed\n");
-        ABORT_IF(is_infeasible, "LP is infeasible\n");
+
+        if(is_infeasible) goto CLEANUP;
 
         double objval = 0;
         rval = LP_get_obj_val(lp, &objval);
@@ -261,14 +264,14 @@ int TSP_find_closest_neighbor_tour(
 
 int TSP_read_problem(char *filename, struct TSPData *data)
 {
-    int *p_ncount = &data->node_count;
-    int *p_ecount = &data->edge_count;
-    int **p_elist = &data->edge_list;
-    int **p_elen = &data->edge_weights;
+    int *p_node_count = &data->node_count;
+    int *p_edge_count = &data->edge_count;
+    int **p_edge_list = &data->edge_list;
+    int **p_edge_weights = &data->edge_weights;
 
     struct _IO_FILE *f = (struct _IO_FILE *) NULL;
-    int i, j, end1, end2, w, rval = 0, ncount, ecount;
-    int *elist = (int *) NULL, *elen = (int *) NULL;
+    int i, j, end1, end2, w, rval = 0, node_count, edge_count;
+    int *edge_list = (int *) NULL, *edge_weights = (int *) NULL;
     double *x = (double *) NULL, *y = (double *) NULL;
 
     if (filename)
@@ -283,33 +286,33 @@ int TSP_read_problem(char *filename, struct TSPData *data)
 
     if (filename && GEOMETRIC_DATA == 0)
     {
-        if (fscanf(f, "%d %d", &ncount, &ecount) != 2)
+        if (fscanf(f, "%d %d", &node_count, &edge_count) != 2)
         {
             fprintf(stderr, "Input file %s has invalid format\n", filename);
             rval = 1;
             goto CLEANUP;
         }
 
-        printf("Nodes: %d  Edges: %d\n", ncount, ecount);
+        printf("Nodes: %d  Edges: %d\n", node_count, edge_count);
         fflush(stdout);
 
-        elist = (int *) malloc(2 * ecount * sizeof(int));
-        if (!elist)
+        edge_list = (int *) malloc(2 * edge_count * sizeof(int));
+        if (!edge_list)
         {
-            fprintf(stderr, "out of memory for elist\n");
+            fprintf(stderr, "out of memory for edge_list\n");
             rval = 1;
             goto CLEANUP;
         }
 
-        elen = (int *) malloc(ecount * sizeof(int));
-        if (!elen)
+        edge_weights = (int *) malloc(edge_count * sizeof(int));
+        if (!edge_weights)
         {
-            fprintf(stderr, "out of memory for elen\n");
+            fprintf(stderr, "out of memory for edge_weights\n");
             rval = 1;
             goto CLEANUP;
         }
 
-        for (i = 0; i < ecount; i++)
+        for (i = 0; i < edge_count; i++)
         {
             if (fscanf(f, "%d %d %d", &end1, &end2, &w) != 3)
             {
@@ -317,16 +320,16 @@ int TSP_read_problem(char *filename, struct TSPData *data)
                 rval = 1;
                 goto CLEANUP;
             }
-            elist[2 * i] = end1;
-            elist[2 * i + 1] = end2;
-            elen[i] = w;
+            edge_list[2 * i] = end1;
+            edge_list[2 * i + 1] = end2;
+            edge_weights[i] = w;
         }
     }
     else
     {
         if (filename)
         {
-            if (fscanf(f, "%d", &ncount) != 1)
+            if (fscanf(f, "%d", &node_count) != 1)
             {
                 fprintf(stderr, "Input file %s has invalid format\n", filename);
                 rval = 1;
@@ -335,11 +338,11 @@ int TSP_read_problem(char *filename, struct TSPData *data)
         }
         else
         {
-            ncount = NODE_COUNT_RAND;
+            node_count = NODE_COUNT_RAND;
         }
 
-        x = (double *) malloc(ncount * sizeof(double));
-        y = (double *) malloc(ncount * sizeof(double));
+        x = (double *) malloc(node_count * sizeof(double));
+        y = (double *) malloc(node_count * sizeof(double));
         if (!x || !y)
         {
             fprintf(stdout, "out of memory for x or y\n");
@@ -349,7 +352,7 @@ int TSP_read_problem(char *filename, struct TSPData *data)
 
         if (filename)
         {
-            for (i = 0; i < ncount; i++)
+            for (i = 0; i < node_count; i++)
             {
                 if (fscanf(f, "%lf %lf", &x[i], &y[i]) != 2)
                 {
@@ -361,57 +364,58 @@ int TSP_read_problem(char *filename, struct TSPData *data)
         }
         else
         {
-            rval = build_random_2d_points(ncount, x, y, GRID_SIZE_RAND);
+            rval = generate_random_points_2d(node_count, GRID_SIZE_RAND, x, y);
             if (rval)
             {
-                fprintf(stderr, "build_random_2d_points failed\n");
+                fprintf(stderr, "generate_random_points_2d failed\n");
                 goto CLEANUP;
             }
 
-            printf("%d\n", ncount);
-            for (i = 0; i < ncount; i++)
+            printf("%d\n", node_count);
+            for (i = 0; i < node_count; i++)
             {
                 printf("%.0f %.0f\n", x[i], y[i]);
             }
             printf("\n");
         }
 
-        ecount = (ncount * (ncount - 1)) / 2;
-        time_printf("Complete graph: %d nodes, %d edges\n", ncount, ecount);
+        edge_count = (node_count * (node_count - 1)) / 2;
+        time_printf("Complete graph: %d nodes, %d edges\n", node_count,
+                edge_count);
 
-        elist = (int *) malloc(2 * ecount * sizeof(int));
-        if (!elist)
+        edge_list = (int *) malloc(2 * edge_count * sizeof(int));
+        if (!edge_list)
         {
-            fprintf(stderr, "out of memory for elist\n");
+            fprintf(stderr, "out of memory for edge_list\n");
             rval = 1;
             goto CLEANUP;
         }
 
-        elen = (int *) malloc(ecount * sizeof(int));
-        if (!elen)
+        edge_weights = (int *) malloc(edge_count * sizeof(int));
+        if (!edge_weights)
         {
-            fprintf(stderr, "out of memory for elen\n");
+            fprintf(stderr, "out of memory for edge_weights\n");
             rval = 1;
             goto CLEANUP;
         }
 
-        ecount = 0;
-        for (i = 0; i < ncount; i++)
+        edge_count = 0;
+        for (i = 0; i < node_count; i++)
         {
-            for (j = i + 1; j < ncount; j++)
+            for (j = i + 1; j < node_count; j++)
             {
-                elist[2 * ecount] = i;
-                elist[2 * ecount + 1] = j;
-                elen[ecount] = euclid_edgelen(i, j, x, y);
-                ecount++;
+                edge_list[2 * edge_count] = i;
+                edge_list[2 * edge_count + 1] = j;
+                edge_weights[edge_count] = get_euclidean_distance(x, y, i, j);
+                edge_count++;
             }
         }
     }
 
-    *p_ncount = ncount;
-    *p_ecount = ecount;
-    *p_elist = elist;
-    *p_elen = elen;
+    *p_node_count = node_count;
+    *p_edge_count = edge_count;
+    *p_edge_list = edge_list;
+    *p_edge_weights = edge_weights;
 
     CLEANUP:
     if (f) fclose(f);
