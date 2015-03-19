@@ -6,7 +6,10 @@
 struct BNC
 {
     struct LP *lp;
-    double best_val;
+
+    double *best_x;
+    double best_obj_val;
+
     int *problem_data;
 
     int (*problem_init_lp)(struct LP *, void *);

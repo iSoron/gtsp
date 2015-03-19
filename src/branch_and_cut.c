@@ -22,6 +22,9 @@ int BNC_init(struct BNC *bnc)
     bnc->problem_init_lp = 0;
     bnc->problem_add_cutting_planes = 0;
 
+    bnc->best_x = 0;
+    bnc->best_obj_val = 0;
+
     bnc->lp = (struct LP *) malloc(sizeof(struct LP));
     ABORT_IF(!bnc->lp, "could not allocate bnc->lp\n");
 
@@ -68,7 +71,7 @@ int BNC_solve(struct BNC *bnc)
 static int BNC_solve_node(struct BNC *bnc, int depth)
 {
     struct LP *lp = bnc->lp;
-    double *best_val = &bnc->best_val;
+    double *best_val = &bnc->best_obj_val;
 
     int rval = 0;
     double *x = (double *) NULL;
@@ -110,7 +113,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     if (bnc->problem_add_cutting_planes)
     {
         rval = bnc->problem_add_cutting_planes(lp, bnc->problem_data);
-        ABORT_IF(rval, "TSP_add_cutting_planes failed\n");
+        ABORT_IF(rval, "problem_add_cutting_planes failed\n");
     }
 
     rval = LP_optimize(lp, &is_infeasible);
@@ -129,6 +132,9 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
         if (objval < *best_val)
         {
             *best_val = objval;
+            bnc->best_x = x;
+            x = 0;
+
             time_printf("Found a better integral solution:\n");
             time_printf("    objval = %.2lf **\n", objval);
         }
