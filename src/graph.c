@@ -1,8 +1,108 @@
 #include <malloc.h>
-#include "main.h"
 #include "graph.h"
 #include "util.h"
 #include "lp.h"
+
+void graph_init(struct Graph *graph)
+{
+    if (!graph) return;
+
+    graph->nodes = 0;
+    graph->adj = 0;
+    graph->node_count = 0;
+    graph->edge_count = 0;
+}
+
+void graph_free(struct Graph *graph)
+{
+    if (!graph) return;
+
+    if (graph->nodes) free(graph->nodes);
+    if (graph->adj) free(graph->adj);
+}
+
+int graph_build(
+        int node_count,
+        int edge_count,
+        int *edges,
+        int is_directed,
+        struct Graph *graph)
+{
+    int rval = 0;
+    struct Node *n;
+    struct Adjacency *p;
+
+    graph->edges = (struct Edge *) malloc(edge_count * sizeof(struct Edge));
+    graph->nodes = (struct Node *) malloc(node_count * sizeof(struct Node));
+    graph->adj = (struct Adjacency *) malloc(
+            2 * edge_count * sizeof(struct Adjacency));
+
+    abort_if(!graph->edges, "could not allocate G->edges\n");
+    abort_if(!graph->nodes, "could not allocate G->nodes");
+    abort_if(!graph->adj, "could not allocate G->adj");
+
+    for (int i = 0; i < node_count; i++)
+    {
+        graph->nodes[i].index = i;
+        graph->nodes[i].degree = 0;
+    }
+
+    for (int i = 0; i < edge_count; i++)
+    {
+        int a = edges[2 * i];
+        int b = edges[2 * i + 1];
+        graph->nodes[a].degree++;
+        if(!is_directed) graph->nodes[b].degree++;
+
+        graph->edges[i].reverse = 0;
+        graph->edges[i].index = i;
+        graph->edges[i].from = &graph->nodes[a];
+        graph->edges[i].to = &graph->nodes[b];
+    }
+
+    p = graph->adj;
+    for (int i = 0; i < node_count; i++)
+    {
+        graph->nodes[i].adj = p;
+        p += graph->nodes[i].degree;
+        graph->nodes[i].degree = 0;
+    }
+
+    for (int i = 0; i < edge_count; i++)
+    {
+        int a = edges[2 * i];
+        int b = edges[2 * i + 1];
+
+        n = &graph->nodes[a];
+        n->adj[n->degree].neighbor_index = b;
+        n->adj[n->degree].edge_index = i;
+        n->adj[n->degree].neighbor = &graph->nodes[b];
+        n->adj[n->degree].edge = &graph->edges[i];
+        n->degree++;
+
+        if(!is_directed)
+        {
+            n = &graph->nodes[b];
+            n->adj[n->degree].neighbor_index = a;
+            n->adj[n->degree].edge_index = i;
+            n->adj[n->degree].neighbor = &graph->nodes[b];
+            n->adj[n->degree].edge = &graph->edges[i];
+            n->degree++;
+        }
+    }
+
+    graph->node_count = node_count;
+    graph->edge_count = edge_count;
+
+    CLEANUP:
+    if (rval)
+    {
+        if (graph->edges) free(graph->edges);
+        if (graph->nodes) free(graph->nodes);
+        if (graph->adj) free(graph->adj);
+    }
+    return rval;
+}
 
 void graph_dfs(
         int n, struct Graph *G, double *x, int *island_size, int *island_nodes)
@@ -10,94 +110,50 @@ void graph_dfs(
     *(island_nodes + (*island_size)) = n;
     (*island_size)++;
 
-    struct Node *pn = &G->node_list[n];
+    struct Node *pn = &G->nodes[n];
     pn->mark = 1;
 
-    for (int i = 0; i < pn->deg; i++)
+    for (int i = 0; i < pn->degree; i++)
     {
-        if (x[pn->adj[i].e] > LP_EPSILON)
+        if (x[pn->adj[i].edge_index] > LP_EPSILON)
         {
-            int neighbor = pn->adj[i].n;
+            int neighbor = pn->adj[i].neighbor_index;
 
-            if (G->node_list[neighbor].mark == 0)
+            if (G->nodes[neighbor].mark == 0)
                 graph_dfs(neighbor, G, x, island_size, island_nodes);
         }
     }
 }
 
-void graph_init(struct Graph *G)
-{
-    if (!G) return;
-
-    G->node_list = 0;
-    G->adj_space = 0;
-    G->node_count = 0;
-    G->edge_count = 0;
-}
-
-void graph_free(struct Graph *G)
-{
-    if (!G) return;
-
-    if (G->node_list) free(G->node_list);
-    if (G->adj_space) free(G->adj_space);
-}
-
-int graph_build(int node_count, int edge_count, int *edge_list, struct Graph *G)
+int graph_build_directed_from_undirected(
+        const struct Graph *graph, struct Graph *digraph)
 {
     int rval = 0;
-    struct Node *n;
-    struct AdjObj *p;
 
-    G->node_list = (struct Node *) malloc(node_count * sizeof(struct Node));
-    G->adj_space =
-            (struct AdjObj *) malloc(2 * edge_count * sizeof(struct AdjObj));
+    int *edges = 0;
 
-    abort_if(!G->node_list, "could not allocate G->node_list");
-    abort_if(!G->adj_space, "could not allocate G->adj_space");
+    edges = (int *) malloc(4 * graph->edge_count * sizeof(int));
+    abort_if(!edges, "could not allocate edges");
 
-    for (int i = 0; i < node_count; i++)
-        G->node_list[i].deg = 0;
-
-    for (int i = 0; i < edge_count; i++)
+    for (int i = 0; i < graph->edge_count; i++)
     {
-        int a = edge_list[2 * i];
-        int b = edge_list[2 * i + 1];
-        G->node_list[a].deg++;
-        G->node_list[b].deg++;
+        struct Edge *e = &graph->edges[i];
+        edges[4 * i] = edges[4 * i + 3] = e->from->index;
+        edges[4 * i + 1] = edges[4 * i + 2] = e->to->index;
     }
 
-    p = G->adj_space;
-    for (int i = 0; i < node_count; i++)
-    {
-        G->node_list[i].adj = p;
-        p += G->node_list[i].deg;
-        G->node_list[i].deg = 0;
-    }
+    rval = graph_build(graph->node_count, 2 * graph->edge_count, edges, 1,
+            digraph);
+    abort_if(rval, "graph_build failed");
 
-    for (int i = 0; i < edge_count; i++)
+    for (int i = 0; i < graph->edge_count; i++)
     {
-        int a = edge_list[2 * i];
-        int b = edge_list[2 * i + 1];
-        n = &G->node_list[a];
-        n->adj[n->deg].n = b;
-        n->adj[n->deg].e = i;
-        n->deg++;
-        n = &G->node_list[b];
-        n->adj[n->deg].n = a;
-        n->adj[n->deg].e = i;
-        n->deg++;
+        digraph->edges[2 * i].reverse = &digraph->edges[i * 2 + 1];
+        digraph->edges[2 * i + 1].reverse = &digraph->edges[i * 2];
     }
-
-    G->node_count = node_count;
-    G->edge_count = edge_count;
 
     CLEANUP:
-    if (rval)
-    {
-        if (G->node_list) free(G->node_list);
-        if (G->adj_space) free(G->adj_space);
-    }
+    if (!edges) free(edges);
     return rval;
 }
 

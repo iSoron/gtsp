@@ -6,20 +6,19 @@
 
 int GTSP_init_data(struct GTSP *data)
 {
-    data->node_count = 0;
-    data->edge_count = 0;
-    data->edges = 0;
     data->clusters = 0;
     data->cluster_count = 0;
     data->x_coordinates = 0;
     data->y_coordinates = 0;
+    graph_init(data->graph);
+
     return 0;
 }
 
 void GTSP_free(struct GTSP *data)
 {
     if (!data) return;
-    if (data->edges) free(data->edges);
+    if (data->graph) graph_free(data->graph);
     if (data->clusters) free(data->clusters);
     if (data->x_coordinates) free(data->x_coordinates);
     if (data->y_coordinates) free(data->y_coordinates);
@@ -30,21 +29,33 @@ int GTSP_create_random_problem(
 {
     int rval = 0;
 
-    struct Edge *edges = 0;
+    int *edges = 0;
+    int *weights = 0;
     int *clusters = 0;
 
     double *x_coords = 0;
     double *y_coords = 0;
 
+    struct Graph *graph = 0;
+
     int edge_count = (node_count * (node_count - 1)) / 2;
 
-    edges = (struct Edge *) malloc(edge_count * sizeof(struct Edge));
+    graph = (struct Graph*) malloc(sizeof(struct Graph));
+    abort_if(!graph, "could not allocate graph\n");
+
+    graph_init(graph);
+
+    edges = (int *) malloc(2 * edge_count * sizeof(int));
+    weights = (int *) malloc(edge_count * sizeof(int));
     clusters = (int *) malloc(node_count * sizeof(int));
+
     abort_if(!edges, "could not allocate data->edges\n");
+    abort_if(!weights, "could not allocate weights\n");
     abort_if(!clusters, "could not allocate clusters\n");
 
     x_coords = (double *) malloc(node_count * sizeof(double));
     y_coords = (double *) malloc(node_count * sizeof(double));
+
     abort_if(!x_coords, "could not allocate x_coords\n");
     abort_if(!y_coords, "could not allocate y_coords\n");
 
@@ -52,21 +63,22 @@ int GTSP_create_random_problem(
             x_coords, y_coords, clusters);
     abort_if(rval, "generate_random_clusters_2d failed");
 
-    int current_edge = 0;
+    int curr_edge = 0;
     for (int i = 0; i < edge_count; i++)
         for (int j = i + 1; j < node_count; j++)
         {
-            edges[current_edge].from = i;
-            edges[current_edge].to = j;
-            edges[current_edge].weight =
+            edges[curr_edge * 2] = i;
+            edges[curr_edge * 2 + 1] = j;
+            weights[curr_edge] =
                     get_euclidean_distance(x_coords, y_coords, i, j);
 
-            current_edge++;
+            curr_edge++;
         }
 
-    data->node_count = node_count;
-    data->edge_count = edge_count;
-    data->edges = edges;
+    rval = graph_build(node_count, edge_count, edges, 0, graph);
+    abort_if(rval, "graph_build failed");
+
+    data->graph = graph;
     data->clusters = clusters;
     data->cluster_count = cluster_count;
     data->x_coordinates = x_coords;
@@ -85,11 +97,11 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
 {
     int rval = 0;
 
-    int node_count = data->node_count;
-    int edge_count = data->edge_count;
+    int node_count = data->graph->node_count;
+    int edge_count = data->graph->edge_count;
     int cluster_count = data->cluster_count;
     int *clusters = data->clusters;
-    struct Edge *edges = data->edges;
+    struct Edge *edges = data->graph->edges;
 
     for (int i = 0; i < node_count; i++)
     {
@@ -122,7 +134,7 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
     {
         double obj = (double) edges[i].weight;
         double cmatval[] = {1.0, 1.0};
-        int cmatind[] = {edges[i].from, edges[i].to};
+        int cmatind[] = {edges[i].from->index, edges[i].to->index};
 
         rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
                 &ub);
@@ -142,9 +154,9 @@ int GTSP_write_data(struct GTSP *data, char *filename)
     file = fopen(filename, "w");
     abort_if(!file, "could not open file");
 
-    fprintf(file, "%d %d\n", data->node_count, data->cluster_count);
+    fprintf(file, "%d %d\n", data->graph->node_count, data->cluster_count);
 
-    for (int i = 0; i < data->node_count; i++)
+    for (int i = 0; i < data->graph->node_count; i++)
     {
         fprintf(file, "%.2lf %.2lf %d\n", data->x_coordinates[i],
                 data->y_coordinates[i], data->clusters[i]);
@@ -159,25 +171,27 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
 {
     int rval = 0;
 
-    struct Edge *edges = data->edges;
-    int node_count = data->node_count;
+    struct Edge *edges = data->graph->edges;
+    int node_count = data->graph->node_count;
+    int edge_count = data->graph->edge_count;
 
     FILE *file;
     file = fopen(filename, "w");
     abort_if(!file, "could not open file");
 
     int positive_edge_count = 0;
-    for (int i = 0; i < data->edge_count; i++)
+    for (int i = 0; i < edge_count; i++)
         if (x[i + node_count] > 0.5)
             positive_edge_count++;
 
     fprintf(file, "%d\n", positive_edge_count);
 
-    for (int i = 0; i < data->edge_count; i++)
+    for (int i = 0; i < edge_count; i++)
         if (x[i + node_count] > 0.5)
-            fprintf(file, "%d %d\n", edges[i].from, edges[i].to);
+            fprintf(file, "%d %d\n", edges[i].from->index, edges[i].to->index);
 
     CLEANUP:
     if (file) fclose(file);
     return rval;
 }
+

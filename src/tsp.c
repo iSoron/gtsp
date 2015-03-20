@@ -38,7 +38,7 @@ int TSP_init_lp(struct LP *lp, struct TSPData *data)
         abort_if(rval, "LP_new_row failed");
     }
 
-    /* Build a column for each edge of the graph */
+    /* Build a column for each edge_index of the graph */
     double lb = 0.0;
     double ub = 1.0;
     int cmatbeg = 0;
@@ -83,7 +83,7 @@ int TSP_find_violated_subtour_elimination_cut(
     abort_if(rval, "LP_optimize failed");
     abort_if(is_infeasible, "LP is infeasible");
 
-    rval = graph_build(ncount, edge_count, edges, &G);
+    rval = graph_build(ncount, edge_count, edges, 0, &G);
     abort_if(rval, "graph_build failed");
 
     x = (double *) malloc(edge_count * sizeof(double));
@@ -185,7 +185,7 @@ int TSP_is_graph_connected(
 {
     for (int i = 0; i < G->node_count; i++)
     {
-        G->node_list[i].mark = 0;
+        G->nodes[i].mark = 0;
         island_nodes[i] = -1;
     }
 
@@ -193,7 +193,7 @@ int TSP_is_graph_connected(
 
     for (int i = 0; i < G->node_count; i++)
     {
-        if (G->node_list[i].mark != 0) continue;
+        if (G->nodes[i].mark != 0) continue;
 
         island_sizes[current_island] = 0;
 
@@ -224,29 +224,29 @@ int TSP_find_closest_neighbor_tour(
     struct Graph G;
     graph_init(&G);
 
-    rval = graph_build(node_count, edge_count, edges, &G);
+    rval = graph_build(node_count, edge_count, edges, 0, &G);
     abort_if(rval, "graph_build failed");
 
     for (int j = 0; j < node_count; j++)
-        G.node_list[j].mark = 0;
+        G.nodes[j].mark = 0;
 
     for (int j = 0; j < node_count; j++)
     {
         if (j == node_count - 1)
-            G.node_list[start].mark = 0;
+            G.nodes[start].mark = 0;
 
-        struct Node *pn = &G.node_list[current_node];
+        struct Node *pn = &G.nodes[current_node];
         pn->mark = 1;
 
         int closest_neighbor = -1;
         int closest_edge_length = 10000000;
 
-        for (int i = 0; i < pn->deg; i++)
+        for (int i = 0; i < pn->degree; i++)
         {
-            int edge = pn->adj[i].e;
-            int neighbor = pn->adj[i].n;
+            int edge = pn->adj[i].edge_index;
+            int neighbor = pn->adj[i].neighbor_index;
 
-            if (G.node_list[neighbor].mark == 1) continue;
+            if (G.nodes[neighbor].mark == 1) continue;
             if (elen[edge] > closest_edge_length) continue;
 
             closest_neighbor = neighbor;
@@ -439,7 +439,7 @@ double TSP_find_initial_solution(struct TSPData *data)
 {
     double best_val = 1e99;
 
-    log_verbose("Finding closest neighbor tour\n");
+    log_verbose("Finding closest neighbor_index tour\n");
     for (int i = 0; i < data->node_count; i++)
     {
         int path_length = 0;

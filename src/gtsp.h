@@ -6,19 +6,11 @@
 #define _PROJECT_GTSP_H_
 
 #include "lp.h"
-
-struct Edge
-{
-    int from;
-    int to;
-    int weight;
-};
+#include "graph.h"
 
 struct GTSP
 {
-    int node_count;
-    int edge_count;
-    struct Edge *edges;
+    struct Graph *graph;
 
     int *clusters;
     int cluster_count;

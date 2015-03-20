@@ -8,6 +8,7 @@
 #include "tsp.h"
 #include "branch_and_cut.h"
 #include "gtsp.h"
+#include "flow.h"
 
 char *INPUT_FILENAME = 0;
 unsigned int SEED = 0;
@@ -18,6 +19,79 @@ int GRID_SIZE_RAND = 100;
 static int parse_arguments_tsp(int ac, char **av);
 
 static void print_usage_tsp(char *f);
+
+int test_max_flow()
+{
+    int rval = 0;
+
+    int *edges = 0;
+    double *capacities = 0;
+    double *flow = 0;
+    double flow_value;
+
+    FILE *f = fopen("tmp/flow.in", "r");
+    abort_if(!f, "could not open input file");
+
+    struct Graph graph;
+    graph_init(&graph);
+
+    int node_count, edge_count;
+
+    rval = fscanf(f, "%d %d ", &node_count, &edge_count);
+    abort_if(rval != 2, "invalid input format");
+
+    edges = (int *) malloc(4 * edge_count * sizeof(int));
+    abort_if(!edges, "could not allocate edges\n");
+
+    capacities = (double *) malloc(2 * edge_count * sizeof(double));
+    abort_if(!capacities, "could not allocate capacities");
+
+    for (int i = 0; i < edge_count; i++)
+    {
+        int from, to, cap;
+
+        rval = fscanf(f, "%d %d %d ", &from, &to, &cap);
+        abort_if(rval != 3, "invalid input format");
+
+        edges[i*4] = edges[i*4+3] = from;
+        edges[i*4+1] = edges[i*4 + 2] = to;
+        capacities[2 * i] = cap;
+        capacities[2 * i + 1] = 0;
+    }
+
+    rval = graph_build(node_count, 2 * edge_count, edges, 1, &graph);
+    abort_if(rval, "graph_build failed");
+
+    for (int i = 0; i < edge_count; i++)
+    {
+        graph.edges[2*i].reverse = &graph.edges[2*i+1];
+        graph.edges[2*i+1].reverse = &graph.edges[2*i];
+    }
+
+    flow = (double *) malloc(graph.edge_count * sizeof(double));
+    abort_if(!flow, "could not allocate flow");
+
+    struct Node *from = &graph.nodes[0];
+    struct Node *to = &graph.nodes[graph.node_count - 1];
+
+    rval = flow_find_max_flow(&graph, capacities, from, to, flow, &flow_value);
+    abort_if(rval, "flow_find_max_flow failed");
+
+    log_info("Optimal flow has value %f\n", flow_value);
+    for (int i = 0; i < graph.edge_count; i++)
+    {
+        struct Edge *e = &graph.edges[i];
+        if(flow[e->index] <= 0) continue;
+
+        log_info("  %d %d %6.2f / %6.2f\n", e->from->index, e->to->index, flow[e->index], capacities[e->index]);
+    }
+
+    CLEANUP:
+    if (capacities) free(capacities);
+    if (edges) free(edges);
+    if (flow) free(flow);
+    return rval;
+}
 
 int main_tsp(int ac, char **av)
 {
@@ -172,7 +246,8 @@ static int parse_arguments_tsp(int ac, char **av)
 
 int main(int ac, char **av)
 {
-    return main_gtsp(ac, av);
+    return test_max_flow();
+//    return main_gtsp(ac, av);
 //  return main_tsp(ac, av);
 }
 

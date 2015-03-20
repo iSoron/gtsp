@@ -3,39 +3,60 @@
 
 #include "main.h"
 
-struct AdjObj
+struct Adjacency
 {
-    /* Index of neighbor node */
-    int n;
+    int edge_index;
+    int neighbor_index;
 
-    /* Index of adj joining neighbor */
-    int e;
+    struct Edge *edge;
+    struct Node *neighbor;
 };
 
 struct Node
 {
-    int deg;
-    struct AdjObj *adj;
     int mark;
+
+    int index;
+    int degree;
+
+    struct Adjacency *adj;
+};
+
+struct Edge
+{
+    int index;
+    int weight;
+
+    struct Node *from;
+    struct Node *to;
+
+    struct Edge *reverse;
 };
 
 struct Graph
 {
     int node_count;
     int edge_count;
-    struct Node *node_list;
-    struct AdjObj *adj_space;
+
+    struct Edge *edges;
+    struct Node *nodes;
+
+    struct Adjacency *adj;
 };
 
 void graph_dfs(
         int n, struct Graph *G, double *x, int *icount, int *island);
 
-void graph_init(struct Graph *G);
+void graph_init(struct Graph *graph);
 
-void graph_free(struct Graph *G);
+void graph_free(struct Graph *graph);
 
-int graph_build
-        (int node_count, int edge_count, int *edge_list, struct Graph *G);
+int graph_build(
+        int node_count,
+        int edge_count,
+        int *edges,
+        int is_directed,
+        struct Graph *graph);
 
 void get_delta(
         int nsize,
@@ -45,5 +66,8 @@ void get_delta(
         int *deltacount,
         int *delta,
         int *marks);
+
+int graph_build_directed_from_undirected
+        (const struct Graph *graph, struct Graph *digraph);
 
 #endif
