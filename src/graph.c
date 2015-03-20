@@ -52,7 +52,7 @@ int graph_build(
         int a = edges[2 * i];
         int b = edges[2 * i + 1];
         graph->nodes[a].degree++;
-        if(!is_directed) graph->nodes[b].degree++;
+        if (!is_directed) graph->nodes[b].degree++;
 
         graph->edges[i].reverse = 0;
         graph->edges[i].index = i;
@@ -80,7 +80,7 @@ int graph_build(
         n->adj[n->degree].edge = &graph->edges[i];
         n->degree++;
 
-        if(!is_directed)
+        if (!is_directed)
         {
             n = &graph->nodes[b];
             n->adj[n->degree].neighbor_index = a;
@@ -178,4 +178,21 @@ void get_delta(
 
     for (int i = 0; i < island_node_count; i++)
         marks[island_nodes[i]] = 0;
+}
+
+int get_cut_edges_from_marks(
+        struct Graph *graph, int *cut_edges_count, struct Edge **cut_edges)
+{
+    *cut_edges_count = 0;
+
+    for (int i = 0; i < graph->edge_count; ++i)
+    {
+        struct Edge *e = &graph->edges[i];
+        struct Node *from = e->from;
+        struct Node *to = e->to;
+        if (from->mark && !to->mark)
+            cut_edges[(*cut_edges_count)++] = e;
+    }
+
+    return 0;
 }

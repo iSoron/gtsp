@@ -1,7 +1,6 @@
 #include <malloc.h>
 #include <float.h>
 #include "gtsp.h"
-#include "flow.h"
 #include "util.h"
 
 int flow_find_max_flow(
@@ -57,6 +56,9 @@ int flow_find_max_flow(
             flow[e->reverse->index] -= path_capacity;
         }
     }
+
+    rval = flow_mark_reachable_nodes(digraph, residual_caps, from);
+    abort_if(rval, "flow_mark_reachable_nodes failed");
 
     CLEANUP:
     if (path_edges) free(path_edges);
@@ -150,5 +152,45 @@ int flow_find_augmenting_path(
     if (parents) free(parents);
     if (parent_edges) free(parent_edges);
     if (queue) free(queue);
+    return rval;
+}
+
+int flow_mark_reachable_nodes(
+        struct Graph *graph, double *residual_caps, struct Node *from)
+{
+    int rval = 0;
+
+    struct Node **stack;
+    int stack_top = 0;
+
+    stack = (struct Node**) malloc(graph->node_count * sizeof(struct Node*));
+    abort_if(!stack, "could not allocate stack");
+
+    for (int i = 0; i < graph->node_count; i++)
+        graph->nodes[i].mark = 0;
+
+    from->mark = 1;
+    stack[stack_top++] = from;
+
+    while(stack_top > 0)
+    {
+        struct Node *n = stack[--stack_top];
+
+        for (int j = 0; j < n->degree; j++)
+        {
+            struct Edge *e = n->adj[j].edge;
+            struct Node *neighbor = n->adj[j].neighbor;
+
+            if(neighbor->mark) continue;
+            if(residual_caps[e->index] <= 0) continue;
+
+            stack[stack_top++] = neighbor;
+            neighbor->mark = 1;
+        }
+
+    }
+
+    CLEANUP:
+    if(stack) free(stack);
     return rval;
 }
