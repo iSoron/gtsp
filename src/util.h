@@ -7,12 +7,12 @@
 #define LOG_LEVEL_DEBUG 40
 #define LOG_LEVEL_VERBOSE 50
 
-#define LOG_LEVEL LOG_LEVEL_INFO
+#define LOG_LEVEL LOG_LEVEL_DEBUG
 
 #if LOG_LEVEL < LOG_LEVEL_DEBUG
-#define log_verbose(...)
+#define log_debug(...)
 #else
-#define log_verbose(...) time_printf( __VA_ARGS__)
+#define log_debug(...) time_printf( __VA_ARGS__)
 #endif
 
 #if LOG_LEVEL < LOG_LEVEL_VERBOSE
