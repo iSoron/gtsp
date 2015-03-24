@@ -1,13 +1,15 @@
 #ifndef _PROJECT_UTIL_H_
 #define _PROJECT_UTIL_H_
 
+#include <string.h>
+
 #define LOG_LEVEL_ERROR 10
 #define LOG_LEVEL_WARNING 20
 #define LOG_LEVEL_INFO 30
 #define LOG_LEVEL_DEBUG 40
 #define LOG_LEVEL_VERBOSE 50
 
-#define LOG_LEVEL LOG_LEVEL_DEBUG
+#define LOG_LEVEL LOG_LEVEL_INFO
 
 #if LOG_LEVEL < LOG_LEVEL_DEBUG
 #define log_debug(...)
@@ -42,6 +44,13 @@
 #define abort_if(cond, msg) if(cond) { \
     fprintf(stderr, "%20s:%d " msg "\n", __FILE__, __LINE__); \
     rval = 1; goto CLEANUP; }
+
+#define swap(x, y) do \
+   { unsigned char swap_temp[sizeof(x)]; \
+     memcpy(swap_temp,&y,sizeof(x)); \
+     memcpy(&y,&x, sizeof(x)); \
+     memcpy(&x,swap_temp,sizeof(x)); \
+    } while(0)
 
 void time_printf(const char *fmt, ...);
 

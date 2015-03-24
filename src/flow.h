@@ -1,9 +1,7 @@
-//
-// Created by isoron on 19/03/15.
-//
-
 #ifndef _PROJECT_FLOW_H_
 #define _PROJECT_FLOW_H_
+
+#include "graph.h"
 
 int flow_find_augmenting_path(
         const struct Graph *graph,
@@ -21,6 +19,11 @@ int flow_find_max_flow(
         struct Node *to,
         double *flow,
         double *value);
+
+int flow_mark_reachable_nodes(
+        const struct Graph *graph, double *residual_caps, struct Node *from);
+
+int flow_main(int argc, char **argv);
 
 #include "graph.h"
 

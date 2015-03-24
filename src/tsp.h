@@ -45,4 +45,6 @@ int TSP_init_lp(struct LP *lp, struct TSPData *data);
 
 double TSP_find_initial_solution(struct TSPData *data);
 
+int TSP_main(int argc, char **argv);
+
 #endif

@@ -10,6 +10,8 @@ struct BNC
     double *best_x;
     double best_obj_val;
 
+    double *optimal_x;
+
     int *problem_data;
 
     int (*problem_init_lp)(struct LP *, void *);

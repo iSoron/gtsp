@@ -45,7 +45,6 @@ void BNC_free(struct BNC *bnc)
 int BNC_init_lp(struct BNC *bnc)
 {
     int rval = 0;
-    log_verbose("Initializing LP...\n");
 
     rval = LP_open(bnc->lp);
     abort_if(rval, "LP_open failed");
@@ -76,7 +75,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     int rval = 0;
     double *x = (double *) NULL;
 
-    log_verbose("Optimizing...\n");
+    log_debug("Optimizing...\n");
 
     int is_infeasible;
     rval = LP_optimize(lp, &is_infeasible);
@@ -84,7 +83,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
 
     if (is_infeasible)
     {
-        log_verbose("Branch pruned by infeasibility.\n");
+        log_debug("Branch pruned by infeasibility.\n");
         goto CLEANUP;
     }
 
@@ -92,11 +91,11 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     rval = LP_get_obj_val(lp, &objval);
     abort_if(rval, "LP_get_obj_val failed\n");
 
-    log_verbose("    objective value = %.2f\n", objval);
+    log_debug("    objective value = %.2f\n", objval);
 
     if (objval > *best_val)
     {
-        log_verbose("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
+        log_debug("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
                 *best_val);
         rval = 0;
         goto CLEANUP;
@@ -127,7 +126,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
 
     if (BNC_is_integral(x, num_cols))
     {
-        log_verbose("    solution is integral\n");
+        log_debug("    solution is integral\n");
 
         if (objval < *best_val)
         {
@@ -141,7 +140,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     }
     else
     {
-        log_verbose("    solution is fractional\n");
+        log_debug("    solution is fractional\n");
         rval = BNC_branch_node(bnc, x, depth);
         abort_if(rval, "BNC_branch_node failed");
     }
@@ -160,10 +159,10 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
     int num_cols = LP_get_num_cols(lp);
     int best_branch_var = BNC_find_best_branching_var(x, num_cols);
 
-    log_verbose("Branching on variable x%d = %.6lf (depth %d)...\n",
+    log_debug("Branching on variable x%d = %.6lf (depth %d)...\n",
             best_branch_var, x[best_branch_var], depth);
 
-    log_verbose("Fixing variable x%d to one...\n", best_branch_var);
+    log_debug("Fixing variable x%d to one...\n", best_branch_var);
     rval = LP_change_bound(lp, best_branch_var, 'L', 1.0);
     abort_if(rval, "LP_change_bound failed");
 
@@ -173,7 +172,7 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
     rval = LP_change_bound(lp, best_branch_var, 'L', 0.0);
     abort_if(rval, "LP_change_bound failed");
 
-    log_verbose("Fixing variable x%d to zero...\n", best_branch_var);
+    log_debug("Fixing variable x%d to zero...\n", best_branch_var);
     rval = LP_change_bound(lp, best_branch_var, 'U', 0.0);
     abort_if(rval, "LP_change_bound failed");
 
@@ -183,7 +182,7 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
     rval = LP_change_bound(lp, best_branch_var, 'U', 1.0);
     abort_if(rval, "LP_change_bound failed");
 
-    log_verbose("Finished branching on variable %d\n", best_branch_var);
+    log_debug("Finished branching on variable %d\n", best_branch_var);
 
     CLEANUP:
     return rval;

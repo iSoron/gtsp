@@ -196,3 +196,29 @@ int get_cut_edges_from_marks(
 
     return 0;
 }
+
+int graph_dump(struct Graph *graph)
+{
+    int rval = 0;
+
+    log_debug("node_count: %d edge_count: %d\n", graph->node_count, graph->edge_count);
+
+    for (int i = 0; i < graph->node_count; i++)
+    {
+        struct Node *n = &graph->nodes[i];
+        log_debug("%3d degree: %d mark: %d\n", n->index, n->degree, n->mark);
+    }
+
+    for (int i = 0; i < graph->edge_count; i++)
+    {
+        struct Edge *e = &graph->edges[i];
+        log_debug("%3d (%d, %d) weight: %d ", e->index, e->from->index, e->to->index, e->weight);
+        #if LOG_LEVEL >= LOG_LEVEL_VERBOSE
+            if (e->reverse) printf("reverse: %d ", e->reverse->index);
+            printf("\n");
+        #endif
+    }
+
+    CLEANUP:
+    return rval;
+}

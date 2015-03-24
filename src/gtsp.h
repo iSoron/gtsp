@@ -28,8 +28,12 @@ int GTSP_init_data(struct GTSP *data);
 
 int GTSP_init_lp(struct LP *lp, struct GTSP *data);
 
-int GTSP_write_data(struct GTSP *data, char *filename);
+int GTSP_write_input_data(struct GTSP *data, char *filename);
 
 int GTSP_write_solution(struct GTSP *data, char *filename, double *x);
+
+int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data);
+
+int GTSP_main(int argc, char **argv);
 
 #endif //_PROJECT_GTSP_H_

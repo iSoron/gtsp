@@ -56,9 +56,10 @@ for i in range(cluster_count):
 for i in range(node_count):
     (x,y,cluster) = [ int(float(x)) for x in raw_input().split(' ') ]
     points[cluster].append((x,y))
-    all_points.append((x,y))
+    all_points.append(vector([x,y]))
 
 # solutions file
+(node_count, edge_count) = [ int(x) for x in raw_input().split(' ') ]
 edges_count = int(raw_input())
 edges = []
 for i in range(edges_count):
@@ -66,6 +67,11 @@ for i in range(edges_count):
 
 
 plot = list_plot([], xmax=100, xmin=0, ymax=100, ymin=0)
+
+#plot = plot + sum([text(str(i), points[i]) for i in range(len(points))])
+
+for i in range(node_count):
+    plot = plot + text(str(i), all_points[i] + vector([0,-2]), color='gray')
 
 for i in range(cluster_count):
     plot = plot + list_plot(points[i], color='gray', figsize=FIGURE_SIZE,

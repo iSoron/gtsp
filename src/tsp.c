@@ -1,9 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "main.h"
+#include <getopt.h>
 #include "tsp.h"
 #include "util.h"
 #include "geometry.h"
+#include "branch_and_cut.h"
+
+static int TSP_parse_arguments(int argc, char **argv);
+
+static void TSP_print_usage(char *f);
 
 int TSP_init_data(struct TSPData *data)
 {
@@ -113,7 +118,7 @@ int TSP_find_violated_subtour_elimination_cut(
     while (!TSP_is_graph_connected(&G, x, &island_count, island_sizes,
             island_start, island_nodes))
     {
-        log_verbose("Adding %d BNC_solve_node inequalities...\n", island_count);
+        log_verbose("Adding %d subtour inequalities...\n", island_count);
         for (int i = 0; i < island_count; i++)
         {
             get_delta(island_sizes[i], island_nodes + island_start[i],
@@ -152,6 +157,7 @@ int TSP_find_violated_subtour_elimination_cut(
 int TSP_add_subtour_elimination_cut(struct LP *lp, int delta_length, int *delta)
 {
     int rval = 0;
+
     char sense = 'G';
     double rhs = 2.0;
     int rmatbeg = 0;
@@ -453,4 +459,111 @@ double TSP_find_initial_solution(struct TSPData *data)
     log_verbose("    length = %lf\n", best_val);
 
     return best_val;
+}
+
+int TSP_main(int argc, char **argv)
+{
+    int rval = 0;
+
+    SEED = (unsigned int) get_real_time();
+
+    struct BNC bnc;
+    struct TSPData data;
+
+    rval = TSP_init_data(&data);
+    abort_if(rval, "TSP_init_data failed");
+
+    rval = BNC_init(&bnc);
+    abort_if(rval, "BNC_init failed");
+
+    rval = TSP_parse_arguments(argc, argv);
+    abort_if(rval, "Failed to parse arguments.");
+
+    printf("Seed = %d\n", SEED);
+    srand(SEED);
+
+    rval = TSP_read_problem(INPUT_FILENAME, &data);
+    abort_if(rval, "TSP_read_problem failed");
+
+    bnc.best_obj_val = TSP_find_initial_solution(&data);
+    bnc.problem_data = (void *) &data;
+    bnc.problem_init_lp = (int (*)(struct LP *, void *)) TSP_init_lp;
+    bnc.problem_add_cutting_planes =
+            (int (*)(struct LP *, void *)) TSP_add_cutting_planes;
+
+    rval = BNC_init_lp(&bnc);
+    abort_if(rval, "BNC_init_lp failed");
+
+    rval = BNC_solve(&bnc);
+    abort_if(rval, "BNC_solve_node failed");
+
+    log_info("Optimal integral solution:\n");
+    log_info("    obj value = %.2lf **\n", bnc.best_obj_val);
+
+    CLEANUP:
+    BNC_free(&bnc);
+    TSP_free_data(&data);
+    return rval;
+}
+
+static int TSP_parse_arguments(int argc, char **argv)
+{
+    int rval = 0;
+
+    int c;
+
+    if (argc == 1)
+    {
+        TSP_print_usage(argv[0]);
+        return 1;
+    }
+
+    while ((c = getopt(argc, argv, "ab:gk:s:")) != EOF)
+    {
+        switch (c)
+        {
+            case 'a':;
+                break;
+            case 'b':
+                GRID_SIZE_RAND = atoi(optarg);
+                break;
+            case 'g':
+                GEOMETRIC_DATA = 1;
+                break;
+            case 'k':
+                NODE_COUNT_RAND = atoi(optarg);
+                break;
+            case 's':
+                SEED = (unsigned) atoi(optarg);
+                break;
+            case '?':
+            default:
+                TSP_print_usage(argv[0]);
+                return 1;
+        }
+    }
+
+    if (optind < argc) INPUT_FILENAME = argv[optind++];
+
+    if (optind != argc)
+    {
+        TSP_print_usage(argv[0]);
+        return 1;
+    }
+
+    abort_if(!INPUT_FILENAME && !NODE_COUNT_RAND,
+            "Must specify an input file or use -k for random problem\n");
+
+    CLEANUP:
+    return rval;
+}
+
+static void TSP_print_usage(char *f)
+{
+    fprintf(stderr, "Usage: %s [-see below-] [prob_file]\n"
+            "   -a    add all subtours cuts at once\n"
+            "   -b d  gridsize d for random problems\n"
+            "   -g    prob_file has x-y coordinates\n"
+            "   -k d  generate problem with d cities\n"
+            "   -s d  random SEED\n", f);
 }
