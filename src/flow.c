@@ -69,7 +69,7 @@ int flow_find_max_flow(
     for (int i = 0; i < digraph->node_count; i++)
         digraph->nodes[i].mark = 0;
 
-    log_verbose("Input graph:\n");
+//    log_verbose()("Input graph:\n");
 //    graph_dump(digraph);
 
     log_verbose("Solving flow problem:\n");

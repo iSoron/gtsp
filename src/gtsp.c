@@ -166,6 +166,60 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
     return rval;
 }
 
+int GTSP_add_subcluster_cut(
+        struct LP *lp,
+        struct Graph *graph,
+        struct Edge *e,
+        struct Edge **cut_edges,
+        int cut_edges_count)
+{
+    int rval = 0;
+
+    char sense = 'G';
+    double rhs = 0.0;
+    int newnz = cut_edges_count + 1;
+
+    int rmatbeg = 0;
+    int *rmatind = 0;
+    double *rmatval = 0;
+
+    rmatind = (int *) malloc(newnz * sizeof(int));
+    abort_if(!rmatind, "could not allocate rmatind");
+
+    rmatval = (double *) malloc(newnz * sizeof(double));
+    abort_if(!rmatval, "could not allocate rmatval");
+
+    for (int i = 0; i < cut_edges_count; i++)
+    {
+        rmatind[i] = cut_edges[i]->index + graph->node_count;
+        rmatval[i] = 1.0;
+    }
+
+    rmatind[cut_edges_count] = graph->node_count + e->index;
+    rmatval[cut_edges_count] = -1.0;
+
+    log_debug("Generated cut:\n");
+    for (int i = 0; i < newnz; i++)
+            log_debug("%8.2f x%d\n", rmatval[i], rmatind[i]);
+    log_debug("    %c %.2lf\n", sense, rhs);
+
+    if (OPTIMAL_X)
+    {
+        double sum = 0;
+        for (int i = 0; i < newnz; i++)
+            sum += rmatval[i] * OPTIMAL_X[rmatind[i]];
+        abort_if(sum <= rhs - LP_EPSILON, "cannot add invalid cut");
+    }
+
+    rval = LP_add_rows(lp, 1, newnz, &rhs, &sense, &rmatbeg, rmatind, rmatval);
+    abort_if(rval, "LP_add_rows failed");
+
+    CLEANUP:
+    if (rmatval) free(rmatval);
+    if (rmatind) free(rmatind);
+    return rval;
+}
+
 int GTSP_add_subtour_elimination_cut(
         struct LP *lp,
         struct Graph *graph,
@@ -359,8 +413,9 @@ int GTSP_find_exact_subtour_elimination_cuts(
     struct Graph digraph;
     graph_init(&digraph);
 
-    int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count;
-    int digraph_node_count = node_count + data->cluster_count;
+    int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count +
+            2 * data->cluster_count;
+    int digraph_node_count = node_count + data->cluster_count + 1;
 
     digraph_edges = (int *) malloc(2 * digraph_edge_count * sizeof(int));
     flow = (double *) malloc(digraph_edge_count * sizeof(double));
@@ -410,11 +465,24 @@ int GTSP_find_exact_subtour_elimination_cuts(
 
         digraph_edges[ke++] = n->index;
         digraph_edges[ke++] = node_count + cl;
-        capacities[kc++] = 1e100;
+        capacities[kc++] = 1e10;
 
         digraph_edges[ke++] = node_count + cl;
         digraph_edges[ke++] = n->index;
-        capacities[kc++] = 1e100;
+        capacities[kc++] = 1e10;
+    }
+
+    // Create an extra node and connect it to each cluster node through
+    // some edge with zero capacity
+    for (int i = 0; i < data->cluster_count; i++)
+    {
+        digraph_edges[ke++] = node_count + i;
+        digraph_edges[ke++] = node_count + data->cluster_count;
+        capacities[kc++] = 0;
+
+        digraph_edges[ke++] = node_count + data->cluster_count;
+        digraph_edges[ke++] = node_count + i;
+        capacities[kc++] = 0;
     }
 
     assert(ke == 2 * digraph_edge_count);
@@ -478,19 +546,23 @@ int GTSP_find_exact_subtour_elimination_cuts(
             abort_if(rval, "get_cut_edges_from_marks failed");
 
             log_verbose("Adding cut for i=%d j=%d, cut edges:\n", i, j);
+            int c = 0;
             for (int k = 0; k < cut_edges_count / 2; k++)
             {
-                cut_edges[k] = &graph->edges[cut_edges[k * 2]->index / 4];
-                log_verbose("    %d %d\n", cut_edges[k * 2]->from->index,
-                        cut_edges[k * 2]->to->index);
+                int idx = cut_edges[k * 2]->index / 4;
+                if (idx > graph->edge_count) continue;
+
+                cut_edges[c++] = &graph->edges[idx];
+                log_verbose("    %d %d\n", cut_edges[c - 1]->from->index,
+                        cut_edges[c - 1]->to->index);
             }
 
             rval = GTSP_add_subtour_elimination_cut(lp, graph, from, to,
-                    cut_edges, cut_edges_count / 2);
+                    cut_edges, c);
             abort_if(rval, "GTSP_add_subtour_elimination_cut failed");
 
             (*added_cuts_count)++;
-            goto CLEANUP;
+            if (*added_cuts_count > 10) goto CLEANUP;
         }
     }
 
@@ -504,6 +576,16 @@ int GTSP_find_exact_subtour_elimination_cuts(
 
             struct Node *from = &digraph.nodes[i];
             struct Node *to = &digraph.nodes[node_count + j];
+
+//            for (int k = 0; k < graph->node_count; k++)
+//            {
+//                struct Node *n = &graph->nodes[k];
+//                if (clusters[n->index] != clusters[i]) continue;
+//
+//                int offset = 4 * graph->edge_count + 2 * k;
+//                capacities[offset] = 0;
+//                capacities[offset + 1] = 0;
+//            }
 
             log_verbose("Calculating max flow from node %d to cluster %to\n", i,
                     j);
@@ -524,19 +606,30 @@ int GTSP_find_exact_subtour_elimination_cuts(
             abort_if(rval, "get_cut_edges_from_marks failed");
 
             log_verbose("Adding cut for i=%d j=%d, cut edges:\n", i, j);
+            int c = 0;
             for (int k = 0; k < cut_edges_count / 2; k++)
             {
-                cut_edges[k] = &graph->edges[cut_edges[k * 2]->index / 4];
-                log_verbose("    %d %d\n", cut_edges[k * 2]->from->index,
-                        cut_edges[k * 2]->to->index);
+                int idx = cut_edges[k * 2]->index / 4;
+                if (idx > graph->edge_count) continue;
+
+                cut_edges[c++] = &graph->edges[idx];
+                log_verbose("    %d %d\n", cut_edges[c - 1]->from->index,
+                        cut_edges[c - 1]->to->index);
             }
 
             rval = GTSP_add_subtour_elimination_cut_2(lp, graph, from, to,
-                    cut_edges, cut_edges_count / 2);
+                    cut_edges, c);
             abort_if(rval, "GTSP_add_subtour_elimination_cut failed");
 
+            for (int k = 0; k < graph->node_count; k++)
+            {
+                int offset = 4 * graph->edge_count + 2 * k;
+                capacities[offset] = 1e10;
+                capacities[offset + 1] = 1e10;
+            }
+
             (*added_cuts_count)++;
-            goto CLEANUP;
+            if (*added_cuts_count > 10) goto CLEANUP;
         }
     }
 
@@ -567,19 +660,162 @@ int GTSP_find_exact_subtour_elimination_cuts(
             abort_if(rval, "get_cut_edges_from_marks failed");
 
             log_verbose("Adding cut for i=%d j=%d, cut edges:\n", i, j);
+            int c = 0;
             for (int k = 0; k < cut_edges_count / 2; k++)
             {
-                cut_edges[k] = &graph->edges[cut_edges[k * 2]->index / 4];
-                log_verbose("    %d %d\n", cut_edges[k * 2]->from->index,
-                        cut_edges[k * 2]->to->index);
+                int idx = cut_edges[k * 2]->index / 4;
+                if (idx > graph->edge_count) continue;
+
+                cut_edges[c++] = &graph->edges[idx];
+                log_verbose("    %d %d\n", cut_edges[c - 1]->from->index,
+                        cut_edges[c - 1]->to->index);
             }
 
             rval = GTSP_add_subtour_elimination_cut_3(lp, graph, from, to,
-                    cut_edges, cut_edges_count / 2);
-            abort_if(rval, "GTSP_add_subtour_elimination_cut failed");
+                    cut_edges, c);
+            abort_if(rval, "GTSP_add_subtour_elimination_cut3 failed");
 
             (*added_cuts_count)++;
-            goto CLEANUP;
+            if (*added_cuts_count > 10) goto CLEANUP;
+        }
+    }
+
+    // subcluster
+    struct Node *root = &digraph.nodes[digraph_node_count - 1];
+    for (int e_index = 0; e_index < graph->edge_count; e_index++)
+    {
+        struct Edge *e = &graph->edges[e_index];
+        double x_e = x[node_count + e_index];
+        if (x_e < LP_EPSILON) continue;
+
+        struct Node *from = &digraph.nodes[e->from->index];
+        struct Node *to = &digraph.nodes[e->to->index];
+
+        if (x[from->index] > 1 - LP_EPSILON && x[to->index] > 1 - LP_EPSILON)
+            continue;
+
+        capacities[4 * e_index] = capacities[4 * e_index + 2] = 0;
+
+        int cluster_from_index = data->clusters[from->index];
+        int cluster_to_index = data->clusters[to->index];
+
+        for (int k = 0; k < data->cluster_count; k++)
+        {
+            if (cluster_from_index == k) continue;
+            if (cluster_to_index == k) continue;
+
+            int offset = 4 * graph->edge_count + 2 * node_count + 2 * k;
+            capacities[offset] = 1e10;
+            capacities[offset + 1] = 1e10;
+        }
+
+        for (int k = 0; k < graph->node_count; k++)
+        {
+            struct Node *n = &graph->nodes[k];
+            if (clusters[n->index] != cluster_from_index &&
+                    clusters[n->index] != cluster_to_index)
+                continue;
+
+            int offset = 4 * graph->edge_count + 2 * k;
+            capacities[offset] = 0;
+            capacities[offset + 1] = 0;
+        }
+
+        // First direction
+        log_debug("Calculating max flow from (%d,%d) to root\n", from->index,
+                to->index);
+        double flow_value;
+        rval = flow_find_max_flow(&digraph, capacities, from, root, flow,
+                &flow_value);
+        abort_if(rval, "flow_find_max_flow failed");
+
+        log_debug("    %.2lf\n", flow_value);
+
+        if (flow_value + LP_EPSILON < x_e)
+        {
+            log_debug("violation: %.2lf > %.2lf\n", flow_value, x_e);
+
+            int cut_edges_count;
+            rval = get_cut_edges_from_marks(&digraph, &cut_edges_count,
+                    cut_edges);
+            abort_if(rval, "get_cut_edges_from_marks failed");
+
+            log_debug("Adding cut for i=%d j=root, cut edges:\n", from->index);
+            int c = 0;
+            for (int k = 0; k < cut_edges_count / 2; k++)
+            {
+                int idx = cut_edges[k * 2]->index / 4;
+                if (idx == e_index) continue;
+                if (idx >= graph->edge_count) continue;
+
+                cut_edges[c++] = &graph->edges[idx];
+                log_debug("    %d %d\n", cut_edges[c - 1]->from->index,
+                        cut_edges[c - 1]->to->index);
+            }
+
+            rval = GTSP_add_subcluster_cut(lp, graph, e, cut_edges, c);
+            abort_if(rval, "GTSP_add_subcluster_cut failed");
+
+            (*added_cuts_count)++;
+            if (*added_cuts_count > 10) goto CLEANUP;
+
+        } else
+        {
+            // Reverse direction
+            log_debug("Trying reverse edge:\n", to->index, from->index);
+
+            rval = flow_find_max_flow(&digraph, capacities, to, root, flow,
+                    &flow_value);
+            abort_if(rval, "flow_find_max_flow failed");
+
+            log_debug("    %.2lf\n", flow_value);
+
+            if (flow_value + LP_EPSILON < x_e)
+            {
+                log_debug("violation: %.2lf > %.2lf\n", flow_value, x_e);
+
+                int cut_edges_count;
+                rval = get_cut_edges_from_marks(&digraph, &cut_edges_count,
+                        cut_edges);
+                abort_if(rval, "get_cut_edges_from_marks failed");
+
+                log_debug("Adding cut for i=%d j=root, cut edges:\n",
+                        from->index);
+                int c = 0;
+                for (int k = 0; k < cut_edges_count / 2; k++)
+                {
+                    int idx = cut_edges[k * 2]->index / 4;
+                    if (idx == e_index) continue;
+                    if (idx >= graph->edge_count) continue;
+
+                    cut_edges[c++] = &graph->edges[idx];
+                    log_debug("    %d %d\n", cut_edges[c - 1]->from->index,
+                            cut_edges[c - 1]->to->index);
+                }
+
+                rval = GTSP_add_subcluster_cut(lp, graph, e, cut_edges, c);
+                abort_if(rval, "GTSP_add_subcluster_cut failed");
+
+                (*added_cuts_count)++;
+                if (*added_cuts_count > 10) goto CLEANUP;
+            }
+        }
+
+        capacities[4 * e_index] = x_e;
+        capacities[4 * e_index + 2] = x_e;
+
+        for (int k = 0; k < graph->node_count; k++)
+        {
+            int offset = 4 * graph->edge_count + 2 * k;
+            capacities[offset] = 1e10;
+            capacities[offset + 1] = 1e10;
+        }
+
+        for (int k = 0; k < data->cluster_count; k++)
+        {
+            int offset = 4 * graph->edge_count + 2 * graph->node_count;
+            capacities[offset + 2 * k] = 0;
+            capacities[offset + 2 * k + 1] = 0;
         }
     }
 
@@ -606,11 +842,19 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
     {
         int added_cuts_count = 0;
 
+        log_debug("Finding subtour cuts...\n");
+
         rval = GTSP_find_exact_subtour_elimination_cuts(lp, data,
                 &added_cuts_count);
         abort_if(rval, "GTSP_find_exact_subtour_elimination_cuts failed");
 
-        log_verbose("Reoptimizing...\n");
+        if (added_cuts_count > 0)
+        {
+            log_debug("Found %d subtour elimination cuts using exact "
+                    "separation\n", added_cuts_count);
+        } else break;
+
+        log_debug("Reoptimizing...\n");
         int is_infeasible;
         rval = LP_optimize(lp, &is_infeasible);
         abort_if(rval, "LP_optimize failed");
@@ -624,9 +868,9 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
         rval = LP_get_x(lp, x);
         abort_if(rval, "LP_get_x failed");
 
-        log_verbose("Current solution:\n");
+        log_debug("Current solution:\n");
         for (int i = 0; i < data->graph->node_count; i++)
-            if (x[i] > LP_EPSILON) log_verbose("    node %d = %.2f\n", i, x[i]);
+            if (x[i] > LP_EPSILON) log_debug("    node %d = %.2f\n", i, x[i]);
 
         for (int i = 0; i < data->graph->edge_count; i++)
         {
@@ -634,18 +878,12 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
             int idx = e->index + data->graph->node_count;
             if (x[idx] > LP_EPSILON)
             {
-                log_verbose("    edge (%d, %d) = %.2f\n", e->from->index,
+                log_debug("    edge (%d, %d) = %.2f\n", e->from->index,
                         e->to->index, x[idx]);
             }
         }
 
         log_debug("    obj val = %f\n", objval);
-
-        if (added_cuts_count > 0)
-        {
-            log_debug("Found %d subtour elimination cuts using exact "
-                    "separation\n", added_cuts_count);
-        } else break;
     }
 
     CLEANUP:
@@ -689,7 +927,7 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
 
     int positive_edge_count = 0;
     for (int i = 0; i < edge_count; i++)
-        if (x[i + node_count] > 0.5)
+        if (x[i + node_count] > LP_EPSILON)
             positive_edge_count++;
 
     fprintf(file, "%d %d\n", node_count, edge_count);
@@ -697,8 +935,9 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
     fprintf(file, "%d\n", positive_edge_count);
 
     for (int i = 0; i < edge_count; i++)
-        if (x[i + node_count] > 0.5)
-            fprintf(file, "%d %d\n", edges[i].from->index, edges[i].to->index);
+        if (x[i + node_count] > LP_EPSILON)
+            fprintf(file, "%d %d %.4lf\n", edges[i].from->index,
+                    edges[i].to->index, x[i + node_count]);
 
     CLEANUP:
     if (file) fclose(file);
@@ -826,7 +1065,7 @@ static int GTSP_parse_args(int argc, char **argv)
                 break;
 
             case 's':
-                SEED = atoi(optarg);
+                SEED = (unsigned) atoi(optarg);
                 break;
 
             case ':':
@@ -932,7 +1171,6 @@ int GTSP_main(int argc, char **argv)
 
     log_info("Branch-and-bound nodes: %d\n", BNC_NODE_COUNT);
     log_info("Max-flow computations: %d\n", FLOW_MAX_FLOW_COUNT);
-
 
     CLEANUP:
     GTSP_free(&data);
