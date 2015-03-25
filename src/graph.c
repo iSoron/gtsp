@@ -17,6 +17,7 @@ void graph_free(struct Graph *graph)
 {
     if (!graph) return;
 
+    if (graph->edges) free(graph->edges);
     if (graph->nodes) free(graph->nodes);
     if (graph->adj) free(graph->adj);
 }
@@ -201,7 +202,8 @@ int graph_dump(struct Graph *graph)
 {
     int rval = 0;
 
-    log_debug("node_count: %d edge_count: %d\n", graph->node_count, graph->edge_count);
+    log_debug("node_count: %d edge_count: %d\n", graph->node_count,
+            graph->edge_count);
 
     for (int i = 0; i < graph->node_count; i++)
     {
@@ -212,8 +214,9 @@ int graph_dump(struct Graph *graph)
     for (int i = 0; i < graph->edge_count; i++)
     {
         struct Edge *e = &graph->edges[i];
-        log_debug("%3d (%d, %d) weight: %d ", e->index, e->from->index, e->to->index, e->weight);
-        #if LOG_LEVEL >= LOG_LEVEL_VERBOSE
+        log_debug("%3d (%d, %d) weight: %d ", e->index, e->from->index,
+                e->to->index, e->weight);
+        #if LOG_LEVEL >= LOG_LEVEL_DEBUG
             if (e->reverse) printf("reverse: %d ", e->reverse->index);
             printf("\n");
         #endif

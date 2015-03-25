@@ -17,6 +17,8 @@ struct BNC
     int (*problem_init_lp)(struct LP *, void *);
 
     int (*problem_add_cutting_planes)(struct LP *, void *);
+
+    int (*problem_solution_found)(void *data, double *x);
 };
 
 int BNC_init(struct BNC *bnc);
@@ -26,5 +28,7 @@ int BNC_solve(struct BNC *bnc);
 int BNC_init_lp(struct BNC *bnc);
 
 void BNC_free(struct BNC *bnc);
+
+extern int BNC_NODE_COUNT;
 
 #endif //_PROJECT_BRANCH_AND_CUT_H_

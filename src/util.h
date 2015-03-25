@@ -11,16 +11,16 @@
 
 #define LOG_LEVEL LOG_LEVEL_INFO
 
-#if LOG_LEVEL < LOG_LEVEL_DEBUG
-#define log_debug(...)
-#else
-#define log_debug(...) time_printf( __VA_ARGS__)
-#endif
-
 #if LOG_LEVEL < LOG_LEVEL_VERBOSE
 #define log_verbose(...)
 #else
 #define log_verbose(...) time_printf( __VA_ARGS__)
+#endif
+
+#if LOG_LEVEL < LOG_LEVEL_DEBUG
+#define log_debug(...)
+#else
+#define log_debug(...) time_printf( __VA_ARGS__)
 #endif
 
 #if LOG_LEVEL < LOG_LEVEL_INFO

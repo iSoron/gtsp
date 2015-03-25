@@ -4,6 +4,8 @@
 #include "gtsp.h"
 #include "util.h"
 
+int FLOW_MAX_FLOW_COUNT = 0;
+
 int flow_mark_reachable_nodes(
         const struct Graph *graph, double *residual_caps, struct Node *from)
 {
@@ -62,11 +64,13 @@ int flow_find_max_flow(
 {
     int rval = 0;
 
+    FLOW_MAX_FLOW_COUNT++;
+
     for (int i = 0; i < digraph->node_count; i++)
         digraph->nodes[i].mark = 0;
 
     log_verbose("Input graph:\n");
-    graph_dump(digraph);
+//    graph_dump(digraph);
 
     log_verbose("Solving flow problem:\n");
 

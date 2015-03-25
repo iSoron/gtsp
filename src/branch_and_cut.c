@@ -5,6 +5,8 @@
 #include "branch_and_cut.h"
 #include "util.h"
 
+int BNC_NODE_COUNT = 0;
+
 static int BNC_solve_node(struct BNC *bnc, int depth);
 
 static int BNC_branch_node(struct BNC *bnc, double *x, int depth);
@@ -40,6 +42,7 @@ void BNC_free(struct BNC *bnc)
         LP_free(bnc->lp);
         free(bnc->lp);
     }
+    if (bnc->best_x) free(bnc->best_x);
 }
 
 int BNC_init_lp(struct BNC *bnc)
@@ -72,6 +75,8 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     struct LP *lp = bnc->lp;
     double *best_val = &bnc->best_obj_val;
 
+    BNC_NODE_COUNT++;
+
     int rval = 0;
     double *x = (double *) NULL;
 
@@ -91,10 +96,12 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     rval = LP_get_obj_val(lp, &objval);
     abort_if(rval, "LP_get_obj_val failed\n");
 
-    log_debug("    objective value = %.2f\n", objval);
+    log_debug("    obj value = %.2f\n", objval);
 
-    if (objval > *best_val)
+    if (objval > *best_val + LP_EPSILON)
     {
+
+
         log_debug("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
                 *best_val);
         rval = 0;
@@ -128,17 +135,20 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     {
         log_debug("    solution is integral\n");
 
-        if (objval < *best_val)
+        if (objval + LP_EPSILON < *best_val)
         {
+            if (bnc->best_x) free(bnc->best_x);
             *best_val = objval;
             bnc->best_x = x;
             x = 0;
 
             log_info("Found a better integral solution:\n");
-            log_info("    objval = %.2lf **\n", objval);
+            log_info("    obj val = %.2lf **\n", objval);
+
+            if (bnc->problem_solution_found)
+                bnc->problem_solution_found(bnc->problem_data, bnc->best_x);
         }
-    }
-    else
+    } else
     {
         log_debug("    solution is fractional\n");
         rval = BNC_branch_node(bnc, x, depth);
