@@ -385,56 +385,26 @@ int GTSP_add_subtour_elimination_cut_3(
     return rval;
 }
 
-int GTSP_find_exact_subtour_elimination_cuts(
-        struct LP *lp, struct GTSP *data, int *added_cuts_count)
+int GTSP_build_flow_digraph(struct GTSP *data, double *x, struct Graph *digraph, double *capacities)
 {
     int rval = 0;
 
-    int *clusters = data->clusters;
-
-    double *x = 0;
-    double *capacities = 0;
-
-    double *flow = 0;
-    struct Edge **cut_edges = 0;
-
     int *digraph_edges = 0;
-
     struct Graph *graph = data->graph;
+
     int node_count = graph->node_count;
-
-    int num_cols = LP_get_num_cols(lp);
-    x = (double *) malloc(num_cols * sizeof(double));
-    abort_if(!x, "could not allocate x");
-
-    rval = LP_get_x(lp, x);
-    abort_if(rval, "LP_get_x failed");
-
-    struct Graph digraph;
-    graph_init(&digraph);
 
     int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count +
             2 * data->cluster_count;
     int digraph_node_count = node_count + data->cluster_count + 1;
 
     digraph_edges = (int *) malloc(2 * digraph_edge_count * sizeof(int));
-    flow = (double *) malloc(digraph_edge_count * sizeof(double));
-    capacities = (double *) malloc(digraph_edge_count * sizeof(double));
-    cut_edges =
-            (struct Edge **) malloc(digraph_edge_count * sizeof(struct Edge *));
-
-    abort_if(!digraph_edges, "could not allocate digraph_edges");
-    abort_if(!flow, "could not allocate flow");
-    abort_if(!capacities, "could not allocate capacities");
-    abort_if(!cut_edges, "could not allocate cut_edges");
 
     // Create four directed edges for each edge of the original graph
     int ke = 0;
     int kc = 0;
     for (int i = 0; i < graph->edge_count; i++)
     {
-        assert(node_count + i < num_cols);
-
         struct Edge *e = &graph->edges[i];
         int from = e->from->index;
         int to = e->to->index;
@@ -489,30 +459,78 @@ int GTSP_find_exact_subtour_elimination_cuts(
     assert(kc == digraph_edge_count);
 
     rval = graph_build(digraph_node_count, digraph_edge_count, digraph_edges, 1,
-            &digraph);
+            digraph);
     abort_if(rval, "graph_build failed");
 
     for (int i = 0; i < digraph_edge_count; i += 2)
     {
-        digraph.edges[i].reverse = &digraph.edges[i + 1];
-        digraph.edges[i + 1].reverse = &digraph.edges[i];
+        digraph->edges[i].reverse = &digraph->edges[i + 1];
+        digraph->edges[i + 1].reverse = &digraph->edges[i];
     }
 
-    int max_x_index = 0;
-    double max_x = DBL_MIN;
 
-    for (int i = 0; i < node_count; i++)
-    {
-        struct Node *n = &graph->nodes[i];
-        if (x[n->index] > max_x)
-        {
-            max_x = x[n->index];
-            max_x_index = i;
-        }
-    }
+    CLEANUP:
+    return rval;
+}
+
+int GTSP_find_exact_subtour_elimination_cuts(
+        struct LP *lp, struct GTSP *data, int *added_cuts_count)
+{
+    int rval = 0;
+
+    double *x = 0;
+    double *flow = 0;
+    double *capacities = 0;
+
+    struct Edge **cut_edges = 0;
+
+    int *clusters = data->clusters;
+    struct Graph *graph = data->graph;
+    int node_count = graph->node_count;
+
+
+    int num_cols = LP_get_num_cols(lp);
+    x = (double *) malloc(num_cols * sizeof(double));
+    abort_if(!x, "could not allocate x");
+
+    rval = LP_get_x(lp, x);
+    abort_if(rval, "LP_get_x failed");
+
+    struct Graph digraph;
+    graph_init(&digraph);
+
+    int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count +
+            2 * data->cluster_count;
+
+    flow = (double *) malloc(digraph_edge_count * sizeof(double));
+    capacities = (double *) malloc(digraph_edge_count * sizeof(double));
+    cut_edges =
+            (struct Edge **) malloc(digraph_edge_count * sizeof(struct Edge *));
+
+    abort_if(!flow, "could not allocate flow");
+    abort_if(!capacities, "could not allocate capacities");
+    abort_if(!cut_edges, "could not allocate cut_edges");
+
+
+    rval = GTSP_build_flow_digraph(data, x, &digraph, capacities);
+    abort_if(rval, "GTSP_build_flow_digraph failed");
+
 
     // Constraints (2.3)
     {
+        int max_x_index = 0;
+        double max_x = DBL_MIN;
+
+        for (int i = 0; i < node_count; i++)
+        {
+            struct Node *n = &graph->nodes[i];
+            if (x[n->index] > max_x)
+            {
+                max_x = x[n->index];
+                max_x_index = i;
+            }
+        }
+
         int i = max_x_index;
 
         for (int j = 0; j < node_count; j++)
@@ -681,7 +699,7 @@ int GTSP_find_exact_subtour_elimination_cuts(
     }
 
     // subcluster
-    struct Node *root = &digraph.nodes[digraph_node_count - 1];
+    struct Node *root = &digraph.nodes[digraph.node_count - 1];
     for (int e_index = 0; e_index < graph->edge_count; e_index++)
     {
         struct Edge *e = &graph->edges[e_index];
@@ -821,7 +839,6 @@ int GTSP_find_exact_subtour_elimination_cuts(
 
     CLEANUP:
     graph_free(&digraph);
-    if (digraph_edges) free(digraph_edges);
     if (flow) free(flow);
     if (cut_edges) free(cut_edges);
     if (capacities) free(capacities);
