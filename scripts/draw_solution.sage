@@ -1,3 +1,5 @@
+from sage.plot.colors import red, white, blue, green, yellow
+
 FIGURE_SIZE = 10
 POINT_SIZE = FIGURE_SIZE
 
@@ -63,15 +65,20 @@ for i in range(node_count):
 edges_count = int(raw_input())
 edges = []
 for i in range(edges_count):
-    edges.append([int(x) for x in raw_input().split(' ') ])
+    (start,end,weight) = raw_input().split(' ')
+    start = int(start)
+    end = int(end)
+    weight = float(weight)
+    edges.append([start,end,weight])
 
 
 plot = list_plot([], xmax=100, xmin=0, ymax=100, ymin=0)
 
-#plot = plot + sum([text(str(i), points[i]) for i in range(len(points))])
-
 max_x = max([p[0] for p in all_points])
 text_offset = vector([0,-1]) * max_x * 0.02
+
+plot = plot + sum([line([all_points[edges[k][0]], all_points[edges[k][1]]],
+        color=white.blend(red, 0.1 + 0.9 * edges[k][2])) for k in range(edges_count)])
 
 for i in range(node_count):
     plot = plot + text(str(i), all_points[i] + text_offset, color='gray')
@@ -85,6 +92,5 @@ for i in range(cluster_count):
         plot = plot + sum([line([vertices[k],vertices[(k+1)%len(vertices)]],
                 thickness=POINT_SIZE/20, color='gray') for k in range(len(vertices))])
 
-plot = plot + sum([line([all_points[edges[k][0]], all_points[edges[k][1]]]) for k in range(edges_count)])
 
-save(plot, "tmp/gtsp.png")
+save(plot, "tmp/gtsp.pdf")
