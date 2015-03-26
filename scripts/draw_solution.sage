@@ -80,8 +80,9 @@ text_offset = vector([0,-1]) * max_x * 0.02
 plot = plot + sum([line([all_points[edges[k][0]], all_points[edges[k][1]]],
         color=white.blend(red, 0.1 + 0.9 * edges[k][2])) for k in range(edges_count)])
 
-for i in range(node_count):
-    plot = plot + text(str(i), all_points[i] + text_offset, color='gray')
+if node_count < 30:
+    for i in range(node_count):
+        plot = plot + text(str(i), all_points[i] + text_offset, color='gray')
 
 for i in range(cluster_count):
     plot = plot + list_plot(points[i], color='gray', figsize=FIGURE_SIZE,
