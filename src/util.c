@@ -35,3 +35,10 @@ void time_printf(const char *fmt, ...)
 
     fflush(stdout);
 }
+
+void pause()
+{
+    printf("Prese [Enter] to continue...");
+    fflush(stdout);
+    getchar();
+}

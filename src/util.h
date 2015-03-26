@@ -60,4 +60,6 @@ double get_current_time(void);
 
 double get_real_time();
 
+void pause();
+
 #endif
