@@ -159,7 +159,7 @@ int get_cut_edges_from_marks(
         struct Edge *e = &graph->edges[i];
         struct Node *from = e->from;
         struct Node *to = e->to;
-        if (from->mark && !to->mark)
+        if (from->mark != to->mark)
             cut_edges[(*cut_edges_count)++] = e;
     }
 

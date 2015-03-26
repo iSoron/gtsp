@@ -198,7 +198,7 @@ int flow_find_augmenting_path(
     {
         struct Node *n = queue[queue_start++];
 
-        n->mark = 2;
+        n->mark = 1;
 
         for (int i = 0; i < n->degree; i++)
         {

@@ -97,6 +97,8 @@ int GTSP_create_random_problem(
     for (int i = 0; i < edge_count; i++)
         for (int j = i + 1; j < node_count; j++)
         {
+            if (clusters[i] == clusters[j]) continue;
+
             edges[curr_edge * 2] = i;
             edges[curr_edge * 2 + 1] = j;
             weights[curr_edge] = get_euclidean_distance(x_coords, y_coords, i,
@@ -104,6 +106,8 @@ int GTSP_create_random_problem(
 
             curr_edge++;
         }
+
+    edge_count = curr_edge;
 
     rval = graph_build(node_count, edge_count, edges, 0, graph);
     abort_if(rval, "graph_build failed");
@@ -245,11 +249,7 @@ static int add_subtour_cut(
 }
 
 static int build_flow_digraph(
-        struct GTSP *data,
-        double *x,
-        struct Graph *digraph,
-        double *capacities,
-        struct Edge **edge_map)
+        struct GTSP *data, double *x, struct Graph *digraph, double *capacities)
 {
     int rval = 0;
 
@@ -270,28 +270,26 @@ static int build_flow_digraph(
     int kc = 0;
     for (int i = 0; i < graph->edge_count; i++)
     {
+//        if (x[node_count + i] < LP_EPSILON) continue;
+
         struct Edge *e = &graph->edges[i];
         int from = e->from->index;
         int to = e->to->index;
 
         digraph_edges[ke++] = from;
         digraph_edges[ke++] = to;
-        edge_map[kc] = e;
         capacities[kc++] = x[node_count + i];
 
         digraph_edges[ke++] = to;
         digraph_edges[ke++] = from;
-        edge_map[kc] = e;
         capacities[kc++] = 0;
 
         digraph_edges[ke++] = to;
         digraph_edges[ke++] = from;
-        edge_map[kc] = e;
         capacities[kc++] = x[node_count + i];
 
         digraph_edges[ke++] = from;
         digraph_edges[ke++] = to;
-        edge_map[kc] = e;
         capacities[kc++] = 0;
     }
 
@@ -304,12 +302,10 @@ static int build_flow_digraph(
 
         digraph_edges[ke++] = n->index;
         digraph_edges[ke++] = node_count + cl;
-        edge_map[kc] = 0;
         capacities[kc++] = 0;
 
         digraph_edges[ke++] = node_count + cl;
         digraph_edges[ke++] = n->index;
-        edge_map[kc] = 0;
         capacities[kc++] = 0;
     }
 
@@ -319,20 +315,19 @@ static int build_flow_digraph(
     {
         digraph_edges[ke++] = node_count + i;
         digraph_edges[ke++] = node_count + data->cluster_count;
-        edge_map[kc] = 0;
         capacities[kc++] = 0;
 
         digraph_edges[ke++] = node_count + data->cluster_count;
         digraph_edges[ke++] = node_count + i;
-        edge_map[kc] = 0;
         capacities[kc++] = 0;
     }
 
-    assert(ke == 2 * digraph_edge_count);
-    assert(kc == digraph_edge_count);
+    assert(ke <= 2 * digraph_edge_count);
+    assert(kc <= digraph_edge_count);
 
-    rval = graph_build(digraph_node_count, digraph_edge_count, digraph_edges, 1,
-            digraph);
+//    digraph_edge_count = kc;
+
+    rval = graph_build(digraph_node_count, kc, digraph_edges, 1, digraph);
     abort_if(rval, "graph_build failed");
 
     for (int i = 0; i < digraph_edge_count; i += 2)
@@ -344,23 +339,6 @@ static int build_flow_digraph(
     CLEANUP:
     if (digraph_edges) free(digraph_edges);
     return rval;
-}
-
-static int map_cut_edges_from_digraph_to_graph(
-        struct Edge **edge_map, int *cut_edges_count, struct Edge **cut_edges)
-{
-    int count = 0;
-
-    for (int i = 0; i < (*cut_edges_count); i += 2)
-    {
-        struct Edge *e = edge_map[cut_edges[i]->index];
-        if (!e) continue;
-        cut_edges[count++] = e;
-    }
-
-    (*cut_edges_count) = count;
-
-    return 0;
 }
 
 void deactivate_cluster_node(double *capacities, struct Node *cluster_node)
@@ -391,7 +369,6 @@ int find_exact_subtour_cuts_cluster_to_cluster(
         struct GTSP *data,
         struct Graph *digraph,
         double *capacities,
-        struct Edge **edge_map,
         int *added_cuts_count)
 {
     int rval = 0;
@@ -404,7 +381,7 @@ int find_exact_subtour_cuts_cluster_to_cluster(
     struct Graph *graph = data->graph;
 
     cut_edges = (struct Edge **) malloc(
-            digraph->edge_count * sizeof(struct Edge *));
+            graph->edge_count * sizeof(struct Edge *));
     flow = (double *) malloc(digraph->edge_count * sizeof(double));
     abort_if(!cut_edges, "could not allocate cut_edges");
     abort_if(!flow, "could not allocate flow");
@@ -439,13 +416,20 @@ int find_exact_subtour_cuts_cluster_to_cluster(
 
             if (flow_value >= 2 - LP_EPSILON) continue;
 
-            rval = get_cut_edges_from_marks(digraph, &cut_edges_count,
-                    cut_edges);
+            log_verbose("Marked nodes:\n");
+            for (int k = 0; k < graph->node_count; k++)
+            {
+                graph->nodes[k].mark = digraph->nodes[k].mark;
+                if (digraph->nodes[k].mark) log_verbose("    %d\n", k);
+            }
+
+            rval = get_cut_edges_from_marks(graph, &cut_edges_count, cut_edges);
             abort_if(rval, "get_cut_edges_from_marks failed");
 
-            rval = map_cut_edges_from_digraph_to_graph(edge_map,
-                    &cut_edges_count, cut_edges);
-            abort_if(rval, "map_cut_edges_from_digraph_to_graph failed");
+            log_verbose("Cut edges:\n");
+            for (int k = 0; k < cut_edges_count; k++)
+                    log_verbose("  %d %d (%d)\n", cut_edges[k]->from->index,
+                            cut_edges[k]->to->index, cut_edges[k]->index);
 
             rval = add_subtour_cut(lp, graph, 0, 0, cut_edges, cut_edges_count,
                     0);
@@ -468,7 +452,6 @@ int find_exact_subtour_cuts_node_to_cluster(
         double *x,
         struct Graph *digraph,
         double *capacities,
-        struct Edge **edge_map,
         int *added_cuts_count)
 {
     int rval = 0;
@@ -496,7 +479,7 @@ int find_exact_subtour_cuts_node_to_cluster(
             struct Node *from = &digraph->nodes[i];
             struct Node *to = &digraph->nodes[graph->node_count + j];
 
-            log_verbose("Sending flow from %d to cluster %d\n", i, j);
+            log_verbose("Sending flow from node %d to cluster %d (must be >= %.4lf)\n", i, j, 2*x[i]);
 
             activate_cluster_node(capacities, to);
 
@@ -511,16 +494,27 @@ int find_exact_subtour_cuts_node_to_cluster(
 
             deactivate_cluster_node(capacities, to);
 
-            if (flow_value >= 2 * x[i] - LP_EPSILON)
+            if (flow_value + LP_EPSILON >= 2 * x[i])
                 continue;
 
-            rval = get_cut_edges_from_marks(digraph, &cut_edges_count,
-                    cut_edges);
+            log_verbose("Marked nodes:\n");
+            for (int k = 0; k < graph->node_count; k++)
+            {
+                graph->nodes[k].mark = digraph->nodes[k].mark;
+                if (graph->nodes[k].mark) log_verbose("    %d\n", k);
+            }
+
+            rval = get_cut_edges_from_marks(graph, &cut_edges_count, cut_edges);
             abort_if(rval, "get_cut_edges_from_marks failed");
 
-            rval = map_cut_edges_from_digraph_to_graph(edge_map,
-                    &cut_edges_count, cut_edges);
-            abort_if(rval, "map_cut_edges_from_digraph_to_graph failed");
+            log_verbose("Cut edges:\n");
+            for (int k = 0; k < cut_edges_count; k++)
+            {
+                struct Edge *e = cut_edges[k];
+                assert(e->from->mark != e->to->mark);
+                log_verbose("  %d (%d) %d (%d) [%d]\n", e->from->index, e->from->mark,
+                        e->to->index, e->to->mark, e->index);
+            }
 
             rval = add_subtour_cut(lp, graph, from, 0, cut_edges,
                     cut_edges_count, 1);
@@ -543,7 +537,6 @@ int find_exact_subtour_cuts_node_to_node(
         double *x,
         struct Graph *digraph,
         double *capacities,
-        struct Edge **edge_map,
         int *added_cuts_count)
 {
     int rval = 0;
@@ -595,19 +588,26 @@ int find_exact_subtour_cuts_node_to_node(
         if (flow_value >= 2 * (x[i] + x[j] - 1) - LP_EPSILON)
             continue;
 
-        rval = get_cut_edges_from_marks(digraph, &cut_edges_count, cut_edges);
+        log_verbose("Marked nodes:\n");
+        for (int k = 0; k < graph->node_count; k++)
+        {
+            graph->nodes[k].mark = digraph->nodes[k].mark;
+            if (digraph->nodes[k].mark) log_verbose("    %d\n", k);
+        }
+
+        rval = get_cut_edges_from_marks(graph, &cut_edges_count, cut_edges);
         abort_if(rval, "get_cut_edges_from_marks failed");
 
-        rval = map_cut_edges_from_digraph_to_graph(edge_map, &cut_edges_count,
-                cut_edges);
-        abort_if(rval, "map_cut_edges_from_digraph_to_graph failed");
+        log_verbose("Cut edges:\n");
+        for (int k = 0; k < cut_edges_count; k++)
+                log_verbose("  %d %d (%d)\n", cut_edges[k]->from->index,
+                        cut_edges[k]->to->index, cut_edges[k]->index);
 
         rval = add_subtour_cut(lp, graph, from, to, cut_edges, cut_edges_count,
                 2);
         abort_if(rval, "add_subtour_cut failed");
 
         (*added_cuts_count)++;
-        goto CLEANUP;
     }
 
     CLEANUP:
@@ -623,7 +623,6 @@ int find_exact_subtour_cuts(
 
     double *x = 0;
     double *capacities = 0;
-    struct Edge **edge_map = 0;
 
     int added_cuts_count = 0;
     struct Graph *graph = data->graph;
@@ -635,11 +634,10 @@ int find_exact_subtour_cuts(
     rval = LP_get_x(lp, x);
     abort_if(rval, "LP_get_x failed");
 
-    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
-    log_debug("Writing fractional solution to gtsp-frac.out\n");
+#if LOG_LEVEL >= LOG_LEVEL_DEBUG
     rval = GTSP_write_solution(data, "gtsp-frac.out", x);
     abort_if(rval, "GTSP_write_solution failed");
-    #endif
+#endif
 
     struct Graph digraph;
     graph_init(&digraph);
@@ -647,18 +645,15 @@ int find_exact_subtour_cuts(
     int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count +
             2 * data->cluster_count;
 
-    edge_map = (struct Edge **) malloc(
-            digraph_edge_count * sizeof(struct Edge *));
     capacities = (double *) malloc(digraph_edge_count * sizeof(double));
-    abort_if(!edge_map, "could not allocate edge_map");
     abort_if(!capacities, "could not allocate capacities");
 
-    rval = build_flow_digraph(data, x, &digraph, capacities, edge_map);
+    rval = build_flow_digraph(data, x, &digraph, capacities);
     abort_if(rval, "build_flow_digraph failed");
 
     // Constraints (2.1)
     rval = find_exact_subtour_cuts_cluster_to_cluster(lp, data, &digraph,
-            capacities, edge_map, &added_cuts_count);
+            capacities, &added_cuts_count);
     abort_if(rval, "find_exact_subtour_cuts_cluster_to_cluster failed");
 
     log_debug("Added %d cluster-to-cluster subtour cuts\n", added_cuts_count);
@@ -668,7 +663,7 @@ int find_exact_subtour_cuts(
 
     // Constraints (2.2)
     rval = find_exact_subtour_cuts_node_to_cluster(lp, data, x, &digraph,
-            capacities, edge_map, &added_cuts_count);
+            capacities, &added_cuts_count);
     abort_if(rval, "find_exact_subtour_cuts_node_to_cluster failed");
 
     log_debug("Added %d node-to-cluster subtour cuts\n", added_cuts_count);
@@ -676,7 +671,7 @@ int find_exact_subtour_cuts(
 
     // Constraints (2.3)
     rval = find_exact_subtour_cuts_node_to_node(lp, data, x, &digraph,
-            capacities, edge_map, &added_cuts_count);
+            capacities, &added_cuts_count);
     abort_if(rval, "find_exact_subtour_cuts_node_to_node failed");
 
     log_debug("Added %d node-to-node subtour cuts\n", added_cuts_count);
@@ -684,7 +679,6 @@ int find_exact_subtour_cuts(
 
     CLEANUP:
     graph_free(&digraph);
-    if (edge_map) free(edge_map);
     if (capacities) free(capacities);
     if (x) free(x);
     return rval;
@@ -718,6 +712,12 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
         int is_infeasible;
         rval = LP_optimize(lp, &is_infeasible);
         abort_if(rval, "LP_optimize failed");
+
+        double obj_val;
+        rval = LP_get_obj_val(lp, &obj_val);
+        abort_if(rval, "LP_get_obj_val failed");
+
+        log_debug("    obj val = %.4lf\n", obj_val);
 
         if (is_infeasible) break;
 
@@ -915,6 +915,7 @@ static int GTSP_parse_args(int argc, char **argv)
     if (input_cluster_count < 0)
     {
         input_cluster_count = (int) ceil(input_node_count / 5.0);
+        if (input_cluster_count < 3) input_cluster_count = 3;
     }
 
     if (input_node_count < 0)
@@ -923,7 +924,7 @@ static int GTSP_parse_args(int argc, char **argv)
         rval = 1;
     }
 
-    if(input_cluster_count > input_node_count)
+    if (input_cluster_count > input_node_count)
     {
         printf("Number of clusters must be at most number of nodes.\n");
         rval = 1;
