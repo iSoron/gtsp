@@ -8,6 +8,7 @@
 #include "util.h"
 #include "flow.h"
 #include "branch_and_cut.h"
+#include "math.h"
 
 static double *OPTIMAL_X = 0;
 
@@ -913,8 +914,7 @@ static int GTSP_parse_args(int argc, char **argv)
 
     if (input_cluster_count < 0)
     {
-        printf("You must specify the number of clusters.\n");
-        rval = 1;
+        input_cluster_count = (int) ceil(input_node_count / 5.0);
     }
 
     if (input_node_count < 0)
