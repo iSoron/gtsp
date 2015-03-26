@@ -200,8 +200,6 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
 
 static int BNC_is_integral(double *x, int num_cols)
 {
-    return 1;
-
     for (int i = 0; i < num_cols; i++)
         if (x[i] > LP_EPSILON && x[i] < 1.0 - LP_EPSILON)
             return 0;

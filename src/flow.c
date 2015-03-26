@@ -13,7 +13,7 @@ int flow_mark_reachable_nodes(
 
     struct Node **stack;
     int stack_top = 0;
-    int *parents;
+    int *parents = 0;
 
     stack = (struct Node **) malloc(graph->node_count * sizeof(struct Node *));
     abort_if(!stack, "could not allocate stack");
@@ -69,8 +69,11 @@ int flow_find_max_flow(
     for (int i = 0; i < digraph->node_count; i++)
         digraph->nodes[i].mark = 0;
 
-//    log_verbose()("Input graph:\n");
-//    graph_dump(digraph);
+    log_verbose("Input graph:\n");
+
+    #if LOG_LEVEL >= LOG_LEVEL_VERBOSE
+    graph_dump(digraph);
+    #endif
 
     log_verbose("Solving flow problem:\n");
 
@@ -135,7 +138,10 @@ int flow_find_max_flow(
         log_verbose("New residual capacities:\n");
         for (int i = 0; i < digraph->edge_count; i++)
         {
+            #if LOG_LEVEL >= LOG_LEVEL_VERBOSE
             struct Edge *e = &digraph->edges[i];
+            #endif
+
             if (residual_caps[i] < LP_EPSILON) continue;
 
             log_verbose("%d %d %.4lf (%d)\n", e->from->index, e->to->index, e->index,
@@ -245,6 +251,9 @@ int flow_find_augmenting_path(
 
 int flow_main(int argc, char **argv)
 {
+    UNUSED(argc);
+    UNUSED(argv);
+
     int rval = 0;
 
     int *edges = 0;

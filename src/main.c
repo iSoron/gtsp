@@ -16,7 +16,7 @@ static const struct option options_tab[] = {
         {(char *) 0, (int) 0, (int *) 0, (int) 0}
 };
 
-void GTSP_print_usage(char **argv)
+void GTSP_print_usage()
 {
     printf("wrong usage\n");
 }
@@ -30,16 +30,12 @@ int main(int argc, char **argv)
 
     if (c < 0)
     {
-        GTSP_print_usage(argv);
+        GTSP_print_usage();
         return 1;
     }
 
     switch (c)
     {
-        case 'h':
-            GTSP_print_usage(argv);
-            return 1;
-
         case 'f':
             return flow_main(argc, argv);
 
@@ -48,6 +44,11 @@ int main(int argc, char **argv)
 
         case 'g':
             return GTSP_main(argc, argv);
+
+        default:
+        case 'h':
+            GTSP_print_usage();
+            return 1;
     }
 
 }

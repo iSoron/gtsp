@@ -126,38 +126,6 @@ void graph_dfs(
     }
 }
 
-int graph_build_directed_from_undirected(
-        const struct Graph *graph, struct Graph *digraph)
-{
-    int rval = 0;
-
-    int *edges = 0;
-
-    edges = (int *) malloc(4 * graph->edge_count * sizeof(int));
-    abort_if(!edges, "could not allocate edges");
-
-    for (int i = 0; i < graph->edge_count; i++)
-    {
-        struct Edge *e = &graph->edges[i];
-        edges[4 * i] = edges[4 * i + 3] = e->from->index;
-        edges[4 * i + 1] = edges[4 * i + 2] = e->to->index;
-    }
-
-    rval = graph_build(graph->node_count, 2 * graph->edge_count, edges, 1,
-            digraph);
-    abort_if(rval, "graph_build failed");
-
-    for (int i = 0; i < graph->edge_count; i++)
-    {
-        digraph->edges[2 * i].reverse = &digraph->edges[i * 2 + 1];
-        digraph->edges[2 * i + 1].reverse = &digraph->edges[i * 2];
-    }
-
-    CLEANUP:
-    if (!edges) free(edges);
-    return rval;
-}
-
 void get_delta(
         int island_node_count,
         int *island_nodes,
@@ -198,10 +166,10 @@ int get_cut_edges_from_marks(
     return 0;
 }
 
-int graph_dump(struct Graph *graph)
+int graph_dump(const struct Graph *graph)
 {
-    int rval = 0;
-
+    (void) graph;
+    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
     log_debug("node_count: %d edge_count: %d\n", graph->node_count,
             graph->edge_count);
 
@@ -216,12 +184,10 @@ int graph_dump(struct Graph *graph)
         struct Edge *e = &graph->edges[i];
         log_debug("%3d (%d, %d) weight: %d ", e->index, e->from->index,
                 e->to->index, e->weight);
-        #if LOG_LEVEL >= LOG_LEVEL_DEBUG
             if (e->reverse) printf("reverse: %d ", e->reverse->index);
             printf("\n");
-        #endif
-    }
 
-    CLEANUP:
-    return rval;
+    }
+    #endif
+    return 0;
 }

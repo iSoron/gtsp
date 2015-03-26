@@ -346,9 +346,7 @@ static int build_flow_digraph(
 }
 
 static int map_cut_edges_from_digraph_to_graph(
-       struct Edge **edge_map,
-       int *cut_edges_count,
-       struct Edge **cut_edges)
+        struct Edge **edge_map, int *cut_edges_count, struct Edge **cut_edges)
 {
     int count = 0;
 
@@ -636,9 +634,11 @@ int find_exact_subtour_cuts(
     rval = LP_get_x(lp, x);
     abort_if(rval, "LP_get_x failed");
 
+    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
     log_debug("Writing fractional solution to gtsp-frac.out\n");
     rval = GTSP_write_solution(data, "gtsp-frac.out", x);
     abort_if(rval, "GTSP_write_solution failed");
+    #endif
 
     struct Graph digraph;
     graph_init(&digraph);
@@ -846,13 +846,20 @@ static const struct option options_tab[] = {{"help", no_argument, 0, 'h'},
         {"seed", required_argument, 0, 's'},
         {(char *) 0, (int) 0, (int *) 0, (int) 0}};
 
-static int input_node_count = 20;
-static int input_cluster_count = 5;
+static int input_node_count = -1;
+static int input_cluster_count = -1;
 static int grid_size = 100;
 
-static void GTSP_print_usage(char **argv)
+static void GTSP_print_usage()
 {
-    printf("wrong usage\n");
+    printf("Parameters:\n");
+    printf("%4s %-13s %s\n", "-n", "--nodes", "number of nodes");
+    printf("%4s %-13s %s\n", "-m", "--clusters", "number of clusters");
+    printf("%4s %-13s %s\n", "-s", "--seed", "random seed");
+    printf("%4s %-13s %s\n", "-g", "--grid-size",
+            "size of the box used for generating random points");
+    printf("%4s %-13s %s\n", "-x", "--optimal",
+            "file containg valid solution (used to assert validity of cuts)");
 }
 
 static int GTSP_parse_args(int argc, char **argv)
@@ -902,6 +909,30 @@ static int GTSP_parse_args(int argc, char **argv)
                 return 1;
 
         }
+    }
+
+    if (input_cluster_count < 0)
+    {
+        printf("You must specify the number of clusters.\n");
+        rval = 1;
+    }
+
+    if (input_node_count < 0)
+    {
+        printf("You must specify the number of nodes.\n");
+        rval = 1;
+    }
+
+    if(input_cluster_count > input_node_count)
+    {
+        printf("Number of clusters must be at most number of nodes.\n");
+        rval = 1;
+    }
+
+    if (rval)
+    {
+        GTSP_print_usage();
+        rval = 1;
     }
 
     CLEANUP:

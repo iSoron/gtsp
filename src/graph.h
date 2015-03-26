@@ -67,12 +67,9 @@ void get_delta(
         int *delta,
         int *marks);
 
-int graph_build_directed_from_undirected
-        (const struct Graph *graph, struct Graph *digraph);
-
 int get_cut_edges_from_marks(
         struct Graph *graph, int *cut_edges_count, struct Edge **cut_edges);
 
-int graph_dump(struct Graph *graph);
+int graph_dump(const struct Graph *graph);
 
 #endif

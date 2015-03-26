@@ -35,10 +35,3 @@ void time_printf(const char *fmt, ...)
 
     fflush(stdout);
 }
-
-void next_set(int sz, int *set)
-{
-    int i;
-    for (i = 0; i < sz - 1 && set[i] + 1 == set[i + 1]; i++) set[i] = i;
-    set[i] = set[i] + 1;
-}

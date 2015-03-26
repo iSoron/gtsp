@@ -111,7 +111,10 @@ int TSP_find_violated_subtour_elimination_cut(
     rval = LP_get_x(lp, x);
     abort_if(rval, "LP_get_x failed");
 
-    int round = 0;
+    #if LOG_LEVEL >= LOG_LEVEL_VERBOSE
+    int current_round = 0;
+    #endif
+
     int delta_count = 0;
     int island_count = 0;
 
@@ -127,7 +130,7 @@ int TSP_find_violated_subtour_elimination_cut(
             rval = TSP_add_subtour_elimination_cut(lp, delta_count, delta);
         }
 
-        log_verbose("Reoptimizing (round %d)...\n", ++round);
+        log_verbose("Reoptimizing (round %d)...\n", ++current_round);
         abort_if(rval, "TSP_add_subtour_elimination_cut failed");
 
         rval = LP_optimize(lp, &is_infeasible);
@@ -277,7 +280,7 @@ int TSP_read_problem(char *filename, struct TSPData *data)
 
     struct _IO_FILE *f = (struct _IO_FILE *) NULL;
     int i, j, end1, end2, w, rval = 0, node_count, edge_count;
-    int *edge_list = (int *) NULL, *edge_weights = (int *) NULL;
+    int *edge_list = 0, *edge_weights = 0;
     double *x = (double *) NULL, *y = (double *) NULL;
 
     if (filename)

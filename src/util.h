@@ -52,12 +52,12 @@
      memcpy(&x,swap_temp,sizeof(x)); \
     } while(0)
 
+#define UNUSED(x) (void)(x)
+
 void time_printf(const char *fmt, ...);
 
 double get_current_time(void);
 
 double get_real_time();
-
-void next_set(int sz, int *set);
 
 #endif
