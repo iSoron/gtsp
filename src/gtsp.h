@@ -19,6 +19,8 @@ struct GTSP
     double *y_coordinates;
 };
 
+static const double MIN_CUT_VIOLATION = 0.5;
+
 int GTSP_create_random_problem(
         int node_count, int cluster_count, int grid_size, struct GTSP *data);
 
@@ -35,5 +37,8 @@ int GTSP_write_problem(struct GTSP *data, char *filename);
 int GTSP_write_solution(struct GTSP *data, char *filename, double *x);
 
 int GTSP_main(int argc, char **argv);
+
+extern double *OPTIMAL_X;
+extern double FLOW_CPU_TIME;
 
 #endif //_PROJECT_GTSP_H_

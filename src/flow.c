@@ -54,6 +54,8 @@ int flow_mark_reachable_nodes(
     return rval;
 }
 
+extern double FLOW_CPU_TIME;
+
 int flow_find_max_flow(
         const struct Graph *digraph,
         const double *capacities,
@@ -65,6 +67,7 @@ int flow_find_max_flow(
     int rval = 0;
 
     FLOW_MAX_FLOW_COUNT++;
+    double initial_time = get_current_time();
 
     for (int i = 0; i < digraph->node_count; i++)
         digraph->nodes[i].mark = 0;
@@ -153,6 +156,8 @@ int flow_find_max_flow(
 
     rval = flow_mark_reachable_nodes(digraph, residual_caps, from);
     abort_if(rval, "flow_mark_reachable_nodes failed");
+
+    FLOW_CPU_TIME += get_current_time() - initial_time;
 
     CLEANUP:
     if (path_edges) free(path_edges);

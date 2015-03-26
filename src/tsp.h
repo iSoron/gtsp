@@ -19,7 +19,7 @@ void TSP_free_data(struct TSPData *data);
 int TSP_find_violated_subtour_elimination_cut
         (struct LP *lp, struct TSPData *data);
 
-int TSP_is_graph_connected(
+int graph_find_connected_components(
         struct Graph *G,
         double *x,
         int *island_count,

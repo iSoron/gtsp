@@ -119,25 +119,32 @@ int LP_change_bound(struct LP *lp, int col, char lower_or_upper, double bnd)
     return rval;
 }
 
+extern int LP_OPTIMIZE_COUNT;
+extern double LP_CPU_TIME;
+
 int LP_optimize(struct LP *lp, int *infeasible)
 {
+    LP_OPTIMIZE_COUNT++;
+
     int rval = 0, solstat;
 
     *infeasible = 0;
 
+    double current = get_current_time();
     rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
     abort_if(rval, "CPXdualopt failed");
+    LP_CPU_TIME += get_current_time() - current;
 
     solstat = CPXgetstat(lp->cplex_env, lp->cplex_lp);
     if (solstat == CPX_STAT_INFEASIBLE)
     {
         *infeasible = 1;
+        goto CLEANUP;
     }
     else
     {
-        abort_if(solstat != CPX_STAT_OPTIMAL
-                && solstat != CPX_STAT_OPTIMAL_INFEAS,
-                "Invalid solution status");
+        abort_if(solstat != CPX_STAT_OPTIMAL &&
+                solstat != CPX_STAT_OPTIMAL_INFEAS, "Invalid solution status");
     }
 
     CLEANUP:

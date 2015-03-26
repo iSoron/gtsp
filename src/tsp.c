@@ -22,7 +22,7 @@ int TSP_init_data(struct TSPData *data)
 
 void TSP_free_data(struct TSPData *data)
 {
-    if(!data) return;
+    if (!data) return;
     if (data->edge_list) free(data->edge_list);
     if (data->edge_weights) free(data->edge_weights);
 }
@@ -64,8 +64,7 @@ int TSP_init_lp(struct LP *lp, struct TSPData *data)
 }
 
 int TSP_find_violated_subtour_elimination_cut(
-        struct LP *lp,
-        struct TSPData *data)
+        struct LP *lp, struct TSPData *data)
 {
     int ncount = data->node_count;
     int edge_count = data->edge_count;
@@ -111,16 +110,21 @@ int TSP_find_violated_subtour_elimination_cut(
     rval = LP_get_x(lp, x);
     abort_if(rval, "LP_get_x failed");
 
-    #if LOG_LEVEL >= LOG_LEVEL_VERBOSE
+#if LOG_LEVEL >= LOG_LEVEL_VERBOSE
     int current_round = 0;
     #endif
 
     int delta_count = 0;
     int island_count = 0;
 
-    while (!TSP_is_graph_connected(&G, x, &island_count, island_sizes,
-            island_start, island_nodes))
+    while (1)
     {
+        rval = graph_find_connected_components(&G, x, &island_count,
+                island_sizes, island_start, island_nodes);
+        abort_if(rval, "graph_find_connected_components failed");
+
+        if(island_count == 1) break;
+
         log_verbose("Adding %d subtour inequalities...\n", island_count);
         for (int i = 0; i < island_count; i++)
         {
@@ -136,7 +140,7 @@ int TSP_find_violated_subtour_elimination_cut(
         rval = LP_optimize(lp, &is_infeasible);
         abort_if(rval, "LP_optimize failed");
 
-        if(is_infeasible) goto CLEANUP;
+        if (is_infeasible) goto CLEANUP;
 
         double objval = 0;
         rval = LP_get_obj_val(lp, &objval);
@@ -184,7 +188,7 @@ int TSP_add_subtour_elimination_cut(struct LP *lp, int delta_length, int *delta)
     return rval;
 }
 
-int TSP_is_graph_connected(
+int graph_find_connected_components(
         struct Graph *G,
         double *x,
         int *island_count,
@@ -216,7 +220,7 @@ int TSP_is_graph_connected(
 
     (*island_count) = current_island;
 
-    return (*island_count == 1);
+    return 0;
 }
 
 int TSP_find_closest_neighbor_tour(
@@ -491,8 +495,9 @@ int TSP_main(int argc, char **argv)
     bnc.best_obj_val = TSP_find_initial_solution(&data);
     bnc.problem_data = (void *) &data;
     bnc.problem_init_lp = (int (*)(struct LP *, void *)) TSP_init_lp;
-    bnc.problem_add_cutting_planes =
-            (int (*)(struct LP *, void *)) TSP_add_cutting_planes;
+    bnc.problem_add_cutting_planes = (int (*)(
+            struct LP *,
+            void *)) TSP_add_cutting_planes;
 
     rval = BNC_init_lp(&bnc);
     abort_if(rval, "BNC_init_lp failed");
