@@ -77,8 +77,12 @@ plot = list_plot([], xmax=100, xmin=0, ymax=100, ymin=0)
 max_x = max([p[0] for p in all_points])
 text_offset = vector([0,-1]) * max_x * 0.02
 
-plot = plot + sum([line([all_points[edges[k][0]], all_points[edges[k][1]]],
-        color=white.blend(red, 0.1 + 0.9 * edges[k][2])) for k in range(edges_count)])
+for k in range(edges_count):
+    if edges[k][2] > 0.99:
+        c = blue
+    else:
+        c = white.blend(red, 0.1 + 0.9 * edges[k][2])
+    plot = plot + line([all_points[edges[k][0]], all_points[edges[k][1]]], color=c)
 
 if node_count < 30:
     for i in range(node_count):
