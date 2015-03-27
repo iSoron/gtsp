@@ -6,6 +6,7 @@
 #include "util.h"
 
 #define LP_EPSILON 0.000001
+#define MAX_CUT_POOL_SIZE 100000
 
 int LP_open(struct LP *lp)
 {
@@ -13,11 +14,11 @@ int LP_open(struct LP *lp)
 
     lp->cplex_lp = (CPXLPptr) NULL;
     lp->cplex_env = CPXopenCPLEX(&rval);
-    if (rval)
-    {
-        fprintf(stderr, "CPXopenCPLEX failed, return code %d\n", rval);
-        goto CLEANUP;
-    }
+    abort_if(rval, "CPXopenCPLEX failed");
+
+    lp->cut_pool = (struct Row **) malloc(
+            MAX_CUT_POOL_SIZE * sizeof(struct Row *));
+    abort_if(!lp->cut_pool, "could not allocate cut_pool");
 
     CLEANUP:
     return rval;
@@ -33,6 +34,7 @@ void LP_free(struct LP *lp)
 
     CPXcloseCPLEX(&lp->cplex_env);
     lp->cplex_env = 0;
+    if (lp->cut_pool) free(lp->cut_pool);
 }
 
 int LP_create(struct LP *lp, const char *name)
@@ -158,9 +160,9 @@ int LP_remove_slacks(struct LP *lp, int first_row, double max_slack)
     int *should_remove = 0;
 
     int numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
-    if(numrows < 5000) return 0;
+    if (numrows < 5000) return 0;
 
-    should_remove = (int *) malloc((numrows+1) * sizeof(int));
+    should_remove = (int *) malloc((numrows + 1) * sizeof(int));
     abort_if(!should_remove, "could not allocate should_remove");
 
     slacks = (double *) malloc(numrows * sizeof(double));
@@ -190,12 +192,12 @@ int LP_remove_slacks(struct LP *lp, int first_row, double max_slack)
                 rval = CPXdelrows(lp->cplex_env, lp->cplex_lp, start - count,
                         end - count);
                 abort_if(rval, "CPXdelrows failed");
-                log_verbose("    %d %d (%d)\n", start, end, end-start+1);
+                log_verbose("    %d %d (%d)\n", start, end, end - start + 1);
 
                 count += end - start + 1;
             }
 
-            start = i+1;
+            start = i + 1;
             end = i;
         }
     }
@@ -251,4 +253,70 @@ int LP_write(struct LP *lp, const char *fname)
 
     CLEANUP:
     return rval;
+}
+
+#define return_if_neq(a, b) \
+    if((a)<(b)) return -1; \
+    if((a)>(b)) return 1;
+
+#define return_if_neq_epsilon(a, b) \
+    if((a+LP_EPSILON)<(b)) return -1; \
+    if((a-LP_EPSILON)>(b)) return 1;
+
+int compare_cuts(struct Row *cut1, struct Row *cut2)
+{
+    return_if_neq(cut1->nz, cut2->nz);
+
+    for (int i = 0; i < cut1->nz; i++)
+    {
+        return_if_neq(cut1->rmatind[i], cut2->rmatind[i]);
+        return_if_neq_epsilon(cut1->rmatval[i], cut2->rmatval[i]);
+    }
+
+    return 0;
+}
+
+int LP_add_cut(struct LP *lp, struct Row *cut)
+{
+    int rval = 0;
+
+    rval = LP_update_hash(cut);
+    abort_if(rval, "LP_update_hash failed");
+
+    for (int i = 0; i < lp->cut_pool_size; i++)
+    {
+        if (lp->cut_pool[i]->hash != cut->hash) continue;
+        if (!compare_cuts(lp->cut_pool[i], cut))
+        {
+            free(cut->rmatval);
+            free(cut->rmatind);
+            free(cut);
+            return 0;
+        }
+    }
+
+    lp->cut_pool[lp->cut_pool_size++] = cut;
+
+    int rmatbeg = 0;
+    rval = LP_add_rows(lp, 1, cut->nz, &cut->rhs, &cut->sense, &rmatbeg,
+            cut->rmatind, cut->rmatval);
+    abort_if(rval, "LP_add_rows failed");
+
+    CLEANUP:
+    return rval;
+}
+
+int LP_update_hash(struct Row *cut)
+{
+    unsigned long hash = 0;
+
+    for (int i = 0; i < cut->nz; i++)
+    {
+        hash += cut->rmatind[i] * 65521;
+        hash %= 4294967291;
+    }
+
+    cut->hash = hash;
+
+    return 0;
 }

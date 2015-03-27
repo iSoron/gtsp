@@ -9,6 +9,21 @@ struct LP
 {
     CPXENVptr cplex_env;
     CPXLPptr cplex_lp;
+
+    int cut_pool_size;
+    struct Row **cut_pool;
+};
+
+struct Row
+{
+    unsigned long hash;
+//    int cplex_row_index;
+
+    int nz;
+    char sense;
+    double rhs;
+    double *rmatval;
+    int *rmatind;
 };
 
 static const int MAX_NAME_LENGTH = 100;
@@ -55,5 +70,9 @@ int LP_get_x(struct LP *lp, double *x);
 int LP_get_num_cols(struct LP *lp);
 
 int LP_remove_slacks(struct LP *lp, int start, double max_slack);
+
+int LP_update_hash(struct Row *cut);
+
+int LP_add_cut(struct LP *lp, struct Row *cut);
 
 #endif

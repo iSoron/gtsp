@@ -188,7 +188,6 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
     int rval = 0;
 
     int round = 0;
-    int added_cuts_count = 0;
 
     int violation_total = 3;
     int violation_current = 0;
@@ -197,19 +196,17 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
     while (1)
     {
         round++;
-        int added_cuts_this_round = 0;
 
         log_debug("Finding subtour cuts, round %d, violation %.4lf...\n", round,
                 violations[violation_current]);
 
-        rval = find_exact_subtour_cuts(lp, data, &added_cuts_this_round,
-                violations[violation_current]);
+        int original_cut_pool_size = lp->cut_pool_size;
+        rval = find_exact_subtour_cuts(lp, data, violations[violation_current]);
         abort_if(rval, "find_exact_subtour_cuts failed");
 
-        if (added_cuts_this_round == 0)
+        if (lp->cut_pool_size - original_cut_pool_size == 0)
         {
-            ++violation_current;
-            if (violation_current < violation_total)
+            if (++violation_current < violation_total)
             {
                 log_debug("No cuts found. Decreasing minimum cut violation.\n");
                 continue;
@@ -234,7 +231,7 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
         abort_if(rval, "LP_get_obj_val failed");
 
         log_debug("    obj val = %.4lf\n", obj_val);
-        log_debug("       time = %.2lf\n", time_after_lp-time_before_lp);
+        log_debug("    time = %.2lf\n", time_after_lp - time_before_lp);
 
         if (time_after_lp - time_before_lp > 10.0)
         {
@@ -248,8 +245,6 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
         abort_if(rval, "LP_optimize failed");
 
         if (is_infeasible) break;
-
-        added_cuts_count += added_cuts_this_round;
     }
 
     CLEANUP:

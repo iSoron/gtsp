@@ -114,7 +114,6 @@ int static add_subtour_cut(
     double rhs = 2.0 - 2.0 * type;
     int newnz = cut_edges_count + type;
 
-    int rmatbeg = 0;
     int *rmatind = 0;
     double *rmatval = 0;
 
@@ -155,18 +154,27 @@ int static add_subtour_cut(
         abort_if(sum <= rhs - LP_EPSILON, "cannot add invalid cut");
     }
 
-    rval = LP_add_rows(lp, 1, newnz, &rhs, &sense, &rmatbeg, rmatind,
-            rmatval);
-    abort_if(rval, "LP_add_rows failed");
+    struct Row *cut = 0;
+    cut = (struct Row *) malloc(sizeof(struct Row));
+    abort_if(!cut, "could not allocate cut");
+
+    cut->nz = newnz;
+    cut->sense = sense;
+    cut->rhs = rhs;
+    cut->rmatval = rmatval;
+    cut->rmatind = rmatind;
+
+    rval = LP_add_cut(lp, cut);
+    abort_if(rval, "LP_add_cut failed");
 
     CLEANUP:
-    if (rmatval) free(rmatval);
-    if (rmatind) free(rmatind);
     return rval;
 }
 
 int find_exact_subtour_cuts(
-        struct LP *lp, struct GTSP *data, int *total_added_cuts, double min_cut_violation)
+        struct LP *lp,
+        struct GTSP *data,
+        double min_cut_violation)
 {
     int rval = 0;
 
@@ -190,9 +198,10 @@ int find_exact_subtour_cuts(
 
     struct Graph digraph;
     graph_init(&digraph);
-
     int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count +
             2 * data->cluster_count;
+
+    int original_cut_pool_size = lp->cut_pool_size;
 
     capacities = (double *) malloc(digraph_edge_count * sizeof(double));
     abort_if(!capacities, "could not allocate capacities");
@@ -202,29 +211,31 @@ int find_exact_subtour_cuts(
 
     // Constraints (2.1)
     rval = find_exact_subtour_cuts_cluster_to_cluster(lp, data, &digraph,
-            capacities, &added_cuts_count, min_cut_violation);
+            capacities, min_cut_violation);
     abort_if(rval, "find_exact_subtour_cuts_cluster_to_cluster failed");
 
+    added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
     log_debug("Added %d cluster-to-cluster subtour cuts\n", added_cuts_count);
-    (*total_added_cuts) += added_cuts_count;
     if (added_cuts_count > 0) goto CLEANUP;
 
     // Constraints (2.2)
+    original_cut_pool_size = lp->cut_pool_size;
     rval = find_exact_subtour_cuts_node_to_cluster(lp, data, x, &digraph,
-            capacities, &added_cuts_count, min_cut_violation);
+            capacities, min_cut_violation);
     abort_if(rval, "find_exact_subtour_cuts_node_to_cluster failed");
 
+    added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
     log_debug("Added %d node-to-cluster subtour cuts\n", added_cuts_count);
-    (*total_added_cuts) += added_cuts_count;
     if (added_cuts_count > 0) goto CLEANUP;
 
     // Constraints (2.3)
+    original_cut_pool_size = lp->cut_pool_size;
     rval = find_exact_subtour_cuts_node_to_node(lp, data, x, &digraph,
-            capacities, &added_cuts_count, min_cut_violation);
+            capacities, min_cut_violation);
     abort_if(rval, "find_exact_subtour_cuts_node_to_node failed");
 
+    added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
     log_debug("Added %d node-to-node subtour cuts\n", added_cuts_count);
-    (*total_added_cuts) += added_cuts_count;
 
     CLEANUP:
     graph_free(&digraph);
@@ -239,7 +250,6 @@ int find_exact_subtour_cuts_node_to_node(
         double *x,
         struct Graph *digraph,
         double *capacities,
-        int *added_cuts_count,
         double min_cut_violation)
 {
     int rval = 0;
@@ -309,8 +319,6 @@ int find_exact_subtour_cuts_node_to_node(
         rval = add_subtour_cut(lp, graph, from, to, cut_edges, cut_edges_count,
                 2);
         abort_if(rval, "add_subtour_cut failed");
-
-        (*added_cuts_count)++;
     }
 
     CLEANUP:
@@ -325,7 +333,6 @@ int find_exact_subtour_cuts_node_to_cluster(
         double *x,
         struct Graph *digraph,
         double *capacities,
-        int *added_cuts_count,
         double min_cut_violation)
 {
     int rval = 0;
@@ -396,7 +403,6 @@ int find_exact_subtour_cuts_node_to_cluster(
                     cut_edges_count, 1);
             abort_if(rval, "add_subtour_cut failed");
 
-            (*added_cuts_count)++;
             cuts_count++;
         }
     }
@@ -412,7 +418,6 @@ int find_exact_subtour_cuts_cluster_to_cluster(
         struct GTSP *data,
         struct Graph *digraph,
         double *capacities,
-        int *added_cuts_count,
         double min_cut_violation)
 {
     int rval = 0;
@@ -480,11 +485,8 @@ int find_exact_subtour_cuts_cluster_to_cluster(
                     0);
             abort_if(rval, "add_subtour_cut failed");
 
-            (*added_cuts_count)++;
             cuts_count++;
         }
-
-//        if(cuts_count > 0) break;
     }
 
     CLEANUP:
