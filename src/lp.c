@@ -100,7 +100,6 @@ int LP_add_cols(
 
     rval = CPXaddcols(lp->cplex_env, lp->cplex_lp, newcols, newnz, obj, cmatbeg,
             cmatind, cmatval, lb, ub, (char **) NULL);
-
     abort_if(rval, "CPXaddcols failed");
 
     CLEANUP:
@@ -143,11 +142,69 @@ int LP_optimize(struct LP *lp, int *infeasible)
     }
     else
     {
-        abort_if(solstat != CPX_STAT_OPTIMAL &&
+        abort_if(solstat != CPX_STAT_OPTIMAL && solstat != CPXMIP_OPTIMAL &&
                 solstat != CPX_STAT_OPTIMAL_INFEAS, "Invalid solution status");
     }
 
     CLEANUP:
+    return rval;
+}
+
+int LP_remove_slacks(struct LP *lp, int first_row, double max_slack)
+{
+    int rval = 0;
+
+    double *slacks = 0;
+    int *should_remove = 0;
+
+    int numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
+    if(numrows < 5000) return 0;
+
+    should_remove = (int *) malloc((numrows+1) * sizeof(int));
+    abort_if(!should_remove, "could not allocate should_remove");
+
+    slacks = (double *) malloc(numrows * sizeof(double));
+    abort_if(!slacks, "could not allocate slacks");
+
+    rval = CPXgetslack(lp->cplex_env, lp->cplex_lp, slacks, 0, numrows - 1);
+    abort_if(rval, "CPXgetslack failed");
+
+    for (int i = 0; i < numrows; i++)
+        should_remove[i] = (slacks[i] < -max_slack);
+    should_remove[numrows] = 0;
+
+    log_debug("Deleting constraints...\n");
+    int start = 0;
+    int end = -1;
+    int count = 0;
+    for (int i = first_row; i < numrows; i++)
+    {
+        if (should_remove[i])
+        {
+            end++;
+        }
+        else
+        {
+            if (end >= start)
+            {
+                rval = CPXdelrows(lp->cplex_env, lp->cplex_lp, start - count,
+                        end - count);
+                abort_if(rval, "CPXdelrows failed");
+                log_verbose("    %d %d (%d)\n", start, end, end-start+1);
+
+                count += end - start + 1;
+            }
+
+            start = i+1;
+            end = i;
+        }
+    }
+
+    log_info("Removed %d of %d constraints\n", count, numrows);
+
+    CLEANUP:
+    if (should_remove) free(should_remove);
+    if (slacks) free(slacks);
     return rval;
 }
 

@@ -190,33 +190,62 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
     int round = 0;
     int added_cuts_count = 0;
 
+    int violation_total = 3;
+    int violation_current = 0;
+    double violations[] = {1.0, 0.1, LP_EPSILON};
+
     while (1)
     {
         round++;
         int added_cuts_this_round = 0;
 
-        log_debug("Finding subtour cuts, round %d...\n", round);
+        log_debug("Finding subtour cuts, round %d, violation %.4lf...\n", round,
+                violations[violation_current]);
 
-        rval = find_exact_subtour_cuts(lp, data, &added_cuts_this_round);
+        rval = find_exact_subtour_cuts(lp, data, &added_cuts_this_round,
+                violations[violation_current]);
         abort_if(rval, "find_exact_subtour_cuts failed");
 
         if (added_cuts_this_round == 0)
         {
-            log_debug("No more subtour cuts found.\n");
-            break;
+            ++violation_current;
+            if (violation_current < violation_total)
+            {
+                log_debug("No cuts found. Decreasing minimum cut violation.\n");
+                continue;
+            }
+            else
+            {
+                log_debug("No more cuts found.\n");
+                break;
+            }
         }
 
         log_debug("Reoptimizing...\n");
 
+        double time_before_lp = get_current_time();
         int is_infeasible;
         rval = LP_optimize(lp, &is_infeasible);
         abort_if(rval, "LP_optimize failed");
+        double time_after_lp = get_current_time();
 
         double obj_val;
         rval = LP_get_obj_val(lp, &obj_val);
         abort_if(rval, "LP_get_obj_val failed");
 
         log_debug("    obj val = %.4lf\n", obj_val);
+        log_debug("       time = %.2lf\n", time_after_lp-time_before_lp);
+
+        if (time_after_lp - time_before_lp > 10.0)
+        {
+            log_debug("LP is too slow. Removing slack constraints...\n");
+            int start = data->graph->node_count + data->cluster_count;
+            rval = LP_remove_slacks(lp, start, LP_EPSILON);
+            abort_if(rval, "LP_remove_slacks failed");
+        }
+
+        rval = LP_optimize(lp, &is_infeasible);
+        abort_if(rval, "LP_optimize failed");
 
         if (is_infeasible) break;
 
@@ -450,7 +479,6 @@ int GTSP_solution_found(struct GTSP *data, double *x)
     CLEANUP:
     return rval;
 }
-
 
 double FLOW_CPU_TIME = 0;
 double LP_CPU_TIME = 0;

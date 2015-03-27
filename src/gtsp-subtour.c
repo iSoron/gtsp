@@ -155,7 +155,8 @@ int static add_subtour_cut(
         abort_if(sum <= rhs - LP_EPSILON, "cannot add invalid cut");
     }
 
-    rval = LP_add_rows(lp, 1, newnz, &rhs, &sense, &rmatbeg, rmatind, rmatval);
+    rval = LP_add_rows(lp, 1, newnz, &rhs, &sense, &rmatbeg, rmatind,
+            rmatval);
     abort_if(rval, "LP_add_rows failed");
 
     CLEANUP:
@@ -165,7 +166,7 @@ int static add_subtour_cut(
 }
 
 int find_exact_subtour_cuts(
-        struct LP *lp, struct GTSP *data, int *total_added_cuts)
+        struct LP *lp, struct GTSP *data, int *total_added_cuts, double min_cut_violation)
 {
     int rval = 0;
 
@@ -201,7 +202,7 @@ int find_exact_subtour_cuts(
 
     // Constraints (2.1)
     rval = find_exact_subtour_cuts_cluster_to_cluster(lp, data, &digraph,
-            capacities, &added_cuts_count);
+            capacities, &added_cuts_count, min_cut_violation);
     abort_if(rval, "find_exact_subtour_cuts_cluster_to_cluster failed");
 
     log_debug("Added %d cluster-to-cluster subtour cuts\n", added_cuts_count);
@@ -210,7 +211,7 @@ int find_exact_subtour_cuts(
 
     // Constraints (2.2)
     rval = find_exact_subtour_cuts_node_to_cluster(lp, data, x, &digraph,
-            capacities, &added_cuts_count);
+            capacities, &added_cuts_count, min_cut_violation);
     abort_if(rval, "find_exact_subtour_cuts_node_to_cluster failed");
 
     log_debug("Added %d node-to-cluster subtour cuts\n", added_cuts_count);
@@ -219,7 +220,7 @@ int find_exact_subtour_cuts(
 
     // Constraints (2.3)
     rval = find_exact_subtour_cuts_node_to_node(lp, data, x, &digraph,
-            capacities, &added_cuts_count);
+            capacities, &added_cuts_count, min_cut_violation);
     abort_if(rval, "find_exact_subtour_cuts_node_to_node failed");
 
     log_debug("Added %d node-to-node subtour cuts\n", added_cuts_count);
@@ -238,7 +239,8 @@ int find_exact_subtour_cuts_node_to_node(
         double *x,
         struct Graph *digraph,
         double *capacities,
-        int *added_cuts_count)
+        int *added_cuts_count,
+        double min_cut_violation)
 {
     int rval = 0;
 
@@ -286,7 +288,7 @@ int find_exact_subtour_cuts_node_to_node(
                 &flow_value);
         abort_if(rval, "flow_find_max_flow failed");
 
-        if (flow_value >= 2 * (x[i] + x[j] - 1) - MIN_CUT_VIOLATION)
+        if (flow_value >= 2 * (x[i] + x[j] - 1) - min_cut_violation)
             continue;
 
         log_verbose("Marked nodes:\n");
@@ -323,7 +325,8 @@ int find_exact_subtour_cuts_node_to_cluster(
         double *x,
         struct Graph *digraph,
         double *capacities,
-        int *added_cuts_count)
+        int *added_cuts_count,
+        double min_cut_violation)
 {
     int rval = 0;
 
@@ -367,7 +370,7 @@ int find_exact_subtour_cuts_node_to_cluster(
 
             deactivate_cluster_node(capacities, to);
 
-            if (flow_value + MIN_CUT_VIOLATION >= 2 * x[i])
+            if (flow_value + min_cut_violation >= 2 * x[i])
                 continue;
 
             log_verbose("Marked nodes:\n");
@@ -409,7 +412,8 @@ int find_exact_subtour_cuts_cluster_to_cluster(
         struct GTSP *data,
         struct Graph *digraph,
         double *capacities,
-        int *added_cuts_count)
+        int *added_cuts_count,
+        double min_cut_violation)
 {
     int rval = 0;
 
@@ -455,7 +459,7 @@ int find_exact_subtour_cuts_cluster_to_cluster(
             deactivate_cluster_node(capacities, from);
             deactivate_cluster_node(capacities, to);
 
-            if (flow_value >= 2 - MIN_CUT_VIOLATION) continue;
+            if (flow_value >= 2 - min_cut_violation) continue;
 
             log_verbose("Marked nodes:\n");
             for (int k = 0; k < graph->node_count; k++)

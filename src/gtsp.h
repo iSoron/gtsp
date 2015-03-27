@@ -19,8 +19,6 @@ struct GTSP
     double *y_coordinates;
 };
 
-static const double MIN_CUT_VIOLATION = 0.5;
-
 int GTSP_create_random_problem(
         int node_count, int cluster_count, int grid_size, struct GTSP *data);
 

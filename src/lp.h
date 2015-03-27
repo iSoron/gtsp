@@ -54,4 +54,6 @@ int LP_get_x(struct LP *lp, double *x);
 
 int LP_get_num_cols(struct LP *lp);
 
+int LP_remove_slacks(struct LP *lp, int start, double max_slack);
+
 #endif
