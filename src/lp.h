@@ -4,6 +4,8 @@
 #include <cplex.h>
 
 #define LP_EPSILON 0.000001
+#define MAX_CUT_POOL_SIZE 1000000
+#define MAX_CUT_AGE 10
 
 struct LP
 {
@@ -17,7 +19,8 @@ struct LP
 struct Row
 {
     unsigned long hash;
-//    int cplex_row_index;
+    int cplex_row_index;
+    int age;
 
     int nz;
     char sense;
@@ -69,7 +72,7 @@ int LP_get_x(struct LP *lp, double *x);
 
 int LP_get_num_cols(struct LP *lp);
 
-int LP_remove_slacks(struct LP *lp, int start, double max_slack);
+int LP_remove_old_cuts(struct LP *lp);
 
 int LP_update_hash(struct Row *cut);
 

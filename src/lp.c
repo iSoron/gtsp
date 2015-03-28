@@ -2,11 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <cplex.h>
+#include <assert.h>
 #include "lp.h"
 #include "util.h"
-
-#define LP_EPSILON 0.000001
-#define MAX_CUT_POOL_SIZE 100000
 
 int LP_open(struct LP *lp)
 {
@@ -16,6 +14,7 @@ int LP_open(struct LP *lp)
     lp->cplex_env = CPXopenCPLEX(&rval);
     abort_if(rval, "CPXopenCPLEX failed");
 
+    lp->cut_pool_size = 0;
     lp->cut_pool = (struct Row **) malloc(
             MAX_CUT_POOL_SIZE * sizeof(struct Row *));
     abort_if(!lp->cut_pool, "could not allocate cut_pool");
@@ -121,7 +120,42 @@ int LP_change_bound(struct LP *lp, int col, char lower_or_upper, double bnd)
 }
 
 extern int LP_OPTIMIZE_COUNT;
-extern double LP_CPU_TIME;
+extern double LP_SOLVE_TIME;
+extern double LP_CUT_POOL_TIME;
+
+int LP_update_cut_ages(struct LP *lp)
+{
+    int rval = 0;
+
+    double *slacks = 0;
+
+    int numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
+
+    slacks = (double *) malloc(numrows * sizeof(double));
+    abort_if(!slacks, "could not allocate slacks");
+
+    rval = CPXgetslack(lp->cplex_env, lp->cplex_lp, slacks, 0, numrows - 1);
+    abort_if(rval, "CPXgetslack failed");
+
+    int count = 0;
+    for (int i = 0; i < lp->cut_pool_size; i++)
+    {
+        struct Row *cut = lp->cut_pool[i];
+        if (cut->cplex_row_index < 0) continue;
+        assert(cut->cplex_row_index < numrows);
+
+        if (slacks[cut->cplex_row_index] < -LP_EPSILON)
+            cut->age++;
+        else
+            cut->age = 0;
+
+        if (cut->age > 5) count++;
+    }
+
+    CLEANUP:
+    if (slacks) free(slacks);
+    return rval;
+}
 
 int LP_optimize(struct LP *lp, int *infeasible)
 {
@@ -131,10 +165,17 @@ int LP_optimize(struct LP *lp, int *infeasible)
 
     *infeasible = 0;
 
-    double current = get_current_time();
+    int numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
+    int numcols = CPXgetnumcols(lp->cplex_env, lp->cplex_lp);
+
+    log_debug("Optimizing LP (%d rows %d cols)...\n", numrows, numcols);
+
+    double time_before = get_current_time();
     rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
     abort_if(rval, "CPXdualopt failed");
-    LP_CPU_TIME += get_current_time() - current;
+
+    double time_after = get_current_time();
+    LP_SOLVE_TIME += time_after - time_before;
 
     solstat = CPXgetstat(lp->cplex_env, lp->cplex_lp);
     if (solstat == CPX_STAT_INFEASIBLE)
@@ -148,38 +189,82 @@ int LP_optimize(struct LP *lp, int *infeasible)
                 solstat != CPX_STAT_OPTIMAL_INFEAS, "Invalid solution status");
     }
 
+    double objval;
+    rval = LP_get_obj_val(lp, &objval);
+    abort_if(rval, "LP_get_obj_val failed");
+
+    log_debug("    obj val = %.4lf\n", objval);
+    log_debug("    time = %.4lf\n", time_after - time_before);
+
+    time_before = get_current_time();
+    rval = LP_update_cut_ages(lp);
+    abort_if(rval, "LP_update_cut_ages failed");
+
+    rval = LP_remove_old_cuts(lp);
+    abort_if(rval, "LP_remove_old_cuts failed");
+
+    time_after = get_current_time();
+    LP_CUT_POOL_TIME += time_after - time_before;
+
     CLEANUP:
     return rval;
 }
 
-int LP_remove_slacks(struct LP *lp, int first_row, double max_slack)
+int LP_remove_old_cuts(struct LP *lp)
 {
     int rval = 0;
 
-    double *slacks = 0;
     int *should_remove = 0;
 
     int numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
-    if (numrows < 5000) return 0;
+    log_verbose("    numrows=%d\n", numrows);
 
     should_remove = (int *) malloc((numrows + 1) * sizeof(int));
     abort_if(!should_remove, "could not allocate should_remove");
 
-    slacks = (double *) malloc(numrows * sizeof(double));
-    abort_if(!slacks, "could not allocate slacks");
-
-    rval = CPXgetslack(lp->cplex_env, lp->cplex_lp, slacks, 0, numrows - 1);
-    abort_if(rval, "CPXgetslack failed");
-
     for (int i = 0; i < numrows; i++)
-        should_remove[i] = (slacks[i] < -max_slack);
+        should_remove[i] = 0;
     should_remove[numrows] = 0;
 
-    log_debug("Deleting constraints...\n");
+    log_verbose("Old cplex row index:\n");
+    for (int i = 0; i < lp->cut_pool_size; i++)
+        log_verbose("    %d\n", lp->cut_pool[i]->cplex_row_index);
+
+    log_verbose("Should remove:\n");
+    for (int i = 0; i < lp->cut_pool_size; i++)
+    {
+        struct Row *cut = lp->cut_pool[i];
+        if (cut->age <= MAX_CUT_AGE) continue;
+        if (cut->cplex_row_index < 0) continue;
+
+        should_remove[cut->cplex_row_index] = 1;
+        log_verbose("    %d\n", cut->cplex_row_index);
+    }
+
+    int count = 0;
+    for (int i = 0; i < numrows; i++)
+    {
+        if (!should_remove[i]) continue;
+
+        for (int j = 0; j < lp->cut_pool_size; j++)
+        {
+            struct Row *cut = lp->cut_pool[j];
+
+            if (cut->cplex_row_index == i - count) cut->cplex_row_index = 0;
+            else if (cut->cplex_row_index > i - count) cut->cplex_row_index--;
+        }
+
+        count++;
+    }
+
+    log_verbose("New cplex row index:\n");
+    for (int i = 0; i < lp->cut_pool_size; i++)
+        log_verbose("    %d\n", lp->cut_pool[i]->cplex_row_index);
+
     int start = 0;
     int end = -1;
-    int count = 0;
-    for (int i = first_row; i < numrows; i++)
+    count = 0;
+    for (int i = 0; i < numrows + 1; i++)
     {
         if (should_remove[i])
         {
@@ -202,11 +287,24 @@ int LP_remove_slacks(struct LP *lp, int first_row, double max_slack)
         }
     }
 
-    log_info("Removed %d of %d constraints\n", count, numrows);
+    numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
+    log_verbose("    new numrows=%d\n", numrows);
+
+    for (int i = 0; i < lp->cut_pool_size; i++)
+    {
+        struct Row *cut = lp->cut_pool[i];
+        assert(cut->cplex_row_index < numrows);
+    }
+
+    if (count > 0)
+    {
+        log_info("Found and removed %d old cuts\n", count);
+        rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
+        abort_if(rval, "CPXoptimize failed");
+    }
 
     CLEANUP:
     if (should_remove) free(should_remove);
-    if (slacks) free(slacks);
     return rval;
 }
 
@@ -280,11 +378,13 @@ int LP_add_cut(struct LP *lp, struct Row *cut)
 {
     int rval = 0;
 
+    double time_before = get_current_time();
     rval = LP_update_hash(cut);
     abort_if(rval, "LP_update_hash failed");
 
     for (int i = 0; i < lp->cut_pool_size; i++)
     {
+        if (lp->cut_pool[i]->cplex_row_index < 0) continue;
         if (lp->cut_pool[i]->hash != cut->hash) continue;
         if (!compare_cuts(lp->cut_pool[i], cut))
         {
@@ -295,12 +395,19 @@ int LP_add_cut(struct LP *lp, struct Row *cut)
         }
     }
 
+    abort_if(lp->cut_pool_size > MAX_CUT_POOL_SIZE, "Cut pool is too large");
     lp->cut_pool[lp->cut_pool_size++] = cut;
 
     int rmatbeg = 0;
     rval = LP_add_rows(lp, 1, cut->nz, &cut->rhs, &cut->sense, &rmatbeg,
             cut->rmatind, cut->rmatval);
     abort_if(rval, "LP_add_rows failed");
+
+    cut->cplex_row_index = CPXgetnumrows(lp->cplex_env, lp->cplex_lp) - 1;
+    cut->age = 0;
+
+    double time_after = get_current_time();
+    LP_CUT_POOL_TIME += time_after - time_before;
 
     CLEANUP:
     return rval;

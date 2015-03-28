@@ -97,9 +97,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     rval = LP_get_obj_val(lp, &objval);
     abort_if(rval, "LP_get_obj_val failed\n");
 
-    log_debug("    obj value = %.2f\n", objval);
-
-    if (objval > *best_val + LP_EPSILON)
+    if (ceil(objval) > *best_val + LP_EPSILON)
     {
         log_debug("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
                 *best_val);
@@ -120,20 +118,25 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
         log_debug("Adding problem cutting planes...\n");
         rval = bnc->problem_add_cutting_planes(lp, bnc->problem_data);
         abort_if(rval, "problem_add_cutting_planes failed");
+
+        rval = LP_get_obj_val(lp, &objval);
+        abort_if(rval, "LP_get_obj_val failed");
+
+        if (ceil(objval) > *best_val + LP_EPSILON)
+        {
+            log_debug("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
+                    *best_val);
+            rval = 0;
+            goto CLEANUP;
+        }
+
+        rval = LP_get_x(lp, x);
+        abort_if(rval, "LP_get_x failed");
     }
-
-    rval = LP_optimize(lp, &is_infeasible);
-    abort_if(rval, "LP_optimize failed\n");
-
-    rval = LP_get_obj_val(lp, &objval);
-    abort_if(rval, "LP_get_obj_val failed");
-
-    rval = LP_get_x(lp, x);
-    abort_if(rval, "LP_get_x failed");
 
     if (BNC_is_integral(x, num_cols))
     {
-        log_debug("    solution is integral\n");
+        log_debug("Solution is integral\n");
 
         if (objval + LP_EPSILON < *best_val)
         {
@@ -148,9 +151,10 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
             if (bnc->problem_solution_found)
                 bnc->problem_solution_found(bnc->problem_data, bnc->best_x);
         }
-    } else
+    }
+    else
     {
-        log_debug("    solution is fractional\n");
+        log_debug("Solution is fractional\n");
         rval = BNC_branch_node(bnc, x, depth);
         abort_if(rval, "BNC_branch_node failed");
     }

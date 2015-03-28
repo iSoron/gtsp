@@ -213,34 +213,12 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
             }
             else
             {
-                log_debug("No more cuts found.\n");
+                log_debug("No additional cuts found.\n");
                 break;
             }
         }
 
-        log_debug("Reoptimizing...\n");
-
-        double time_before_lp = get_current_time();
         int is_infeasible;
-        rval = LP_optimize(lp, &is_infeasible);
-        abort_if(rval, "LP_optimize failed");
-        double time_after_lp = get_current_time();
-
-        double obj_val;
-        rval = LP_get_obj_val(lp, &obj_val);
-        abort_if(rval, "LP_get_obj_val failed");
-
-        log_debug("    obj val = %.4lf\n", obj_val);
-        log_debug("    time = %.2lf\n", time_after_lp - time_before_lp);
-
-        if (time_after_lp - time_before_lp > 10.0)
-        {
-            log_debug("LP is too slow. Removing slack constraints...\n");
-            int start = data->graph->node_count + data->cluster_count;
-            rval = LP_remove_slacks(lp, start, LP_EPSILON);
-            abort_if(rval, "LP_remove_slacks failed");
-        }
-
         rval = LP_optimize(lp, &is_infeasible);
         abort_if(rval, "LP_optimize failed");
 
@@ -476,7 +454,8 @@ int GTSP_solution_found(struct GTSP *data, double *x)
 }
 
 double FLOW_CPU_TIME = 0;
-double LP_CPU_TIME = 0;
+double LP_SOLVE_TIME = 0;
+double LP_CUT_POOL_TIME = 0;
 int LP_OPTIMIZE_COUNT = 0;
 
 int GTSP_main(int argc, char **argv)
@@ -556,7 +535,8 @@ int GTSP_main(int argc, char **argv)
     log_info("Max-flow calls: %d\n", FLOW_MAX_FLOW_COUNT);
     log_info("Max-flow computation time: %.2lf\n", FLOW_CPU_TIME);
     log_info("LP optimize calls: %d\n", LP_OPTIMIZE_COUNT);
-    log_info("LP solving time: %.2lf\n", LP_CPU_TIME);
+    log_info("LP solving time: %.2lf\n", LP_SOLVE_TIME);
+    log_info("LP cut pool management time: %.2lf\n", LP_CUT_POOL_TIME);
 
     CLEANUP:
     GTSP_free(&data);
