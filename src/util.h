@@ -44,6 +44,10 @@
     fprintf(stderr, "%20s:%d " msg "\n", __FILE__, __LINE__); \
     rval = 1; goto CLEANUP; }
 
+#define abort_iff(cond, msg, ...) if(cond) { \
+    fprintf(stderr, "%20s:%d " msg "\n", __FILE__, __LINE__, __VA_ARGS__); \
+    rval = 1; goto CLEANUP; }
+
 #define swap(x, y) do \
    { unsigned char swap_temp[sizeof(x)]; \
      memcpy(swap_temp,&y,sizeof(x)); \
