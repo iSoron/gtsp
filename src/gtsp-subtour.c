@@ -18,7 +18,7 @@ int static build_flow_digraph(
 
     int digraph_node_count = node_count + data->cluster_count + 1;
     int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count +
-                             2 * data->cluster_count;
+            2 * data->cluster_count;
 
     digraph_edges = (int *) malloc(2 * digraph_edge_count * sizeof(int));
     abort_if(!digraph_edges, "could not allocate digraph_edges");
@@ -197,7 +197,7 @@ int find_exact_subtour_cuts(
     struct Graph digraph;
     graph_init(&digraph);
     int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count +
-                             2 * data->cluster_count;
+            2 * data->cluster_count;
 
     int original_cut_pool_size = lp->cut_pool_size;
 
@@ -209,44 +209,35 @@ int find_exact_subtour_cuts(
 
     // Constraints (2.1)
     rval = find_exact_subtour_cuts_cluster_to_cluster(lp, data, &digraph,
-                                                      capacities,
-                                                      min_cut_violation);
+            capacities, min_cut_violation);
     abort_if(rval, "find_exact_subtour_cuts_cluster_to_cluster failed");
 
     added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+    log_debug("    %d cluster-to-cluster\n", added_cuts_count);
     if (added_cuts_count > 0)
-    {
-        log_debug("    %d cluster-to-cluster\n",
-                  added_cuts_count);
         goto CLEANUP;
-    }
 
     // Constraints (2.2)
     original_cut_pool_size = lp->cut_pool_size;
     rval = find_exact_subtour_cuts_node_to_cluster(lp, data, x, &digraph,
-                                                   capacities,
-                                                   min_cut_violation);
+            capacities, min_cut_violation);
     abort_if(rval, "find_exact_subtour_cuts_node_to_cluster failed");
 
     added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+    log_debug("    %d node-to-cluster\n", added_cuts_count);
     if (added_cuts_count > 0)
-    {
-        log_debug("    %d node-to-cluster\n", added_cuts_count);
         goto CLEANUP;
-    }
 
     // Constraints (2.3)
     original_cut_pool_size = lp->cut_pool_size;
     rval = find_exact_subtour_cuts_node_to_node(lp, data, x, &digraph,
-                                                capacities, min_cut_violation);
+            capacities, min_cut_violation);
     abort_if(rval, "find_exact_subtour_cuts_node_to_node failed");
 
     added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+    log_debug("    %d node-to-node\n", added_cuts_count);
     if (added_cuts_count > 0)
-    {
-        log_debug("    %d node-to-node\n", added_cuts_count);
         goto CLEANUP;
-    }
 
     CLEANUP:
     graph_free(&digraph);
@@ -306,7 +297,7 @@ int find_exact_subtour_cuts_node_to_node(
         double flow_value;
 
         rval = flow_find_max_flow(digraph, capacities, from, to, flow,
-                                  &flow_value);
+                &flow_value);
         abort_if(rval, "flow_find_max_flow failed");
 
         if (flow_value >= 2 * (x[i] + x[j] - 1) - min_cut_violation)
@@ -325,10 +316,10 @@ int find_exact_subtour_cuts_node_to_node(
         log_verbose("Cut edges:\n");
         for (int k = 0; k < cut_edges_count; k++)
                 log_verbose("  %d %d (%d)\n", cut_edges[k]->from->index,
-                            cut_edges[k]->to->index, cut_edges[k]->index);
+                        cut_edges[k]->to->index, cut_edges[k]->index);
 
         rval = add_subtour_cut(lp, graph, from, to, cut_edges, cut_edges_count,
-                               2);
+                2);
         abort_if(rval, "add_subtour_cut failed");
     }
 
@@ -381,7 +372,7 @@ int find_exact_subtour_cuts_node_to_cluster(
             int cut_edges_count;
 
             rval = flow_find_max_flow(digraph, capacities, from, to, flow,
-                                      &flow_value);
+                    &flow_value);
             abort_if(rval, "flow_find_max_flow failed");
 
             log_verbose("    flow value = %.4lf\n", flow_value);
@@ -407,11 +398,11 @@ int find_exact_subtour_cuts_node_to_cluster(
                 struct Edge *e = cut_edges[k];
                 assert(e->from->mark != e->to->mark);
                 log_verbose("  %d (%d) %d (%d) [%d]\n", e->from->index,
-                            e->from->mark, e->to->index, e->to->mark, e->index);
+                        e->from->mark, e->to->index, e->to->mark, e->index);
             }
 
             rval = add_subtour_cut(lp, graph, from, 0, cut_edges,
-                                   cut_edges_count, 1);
+                    cut_edges_count, 1);
             abort_if(rval, "add_subtour_cut failed");
 
             cuts_count++;
@@ -447,7 +438,7 @@ int find_exact_subtour_cuts_cluster_to_cluster(
     abort_if(!flow, "could not allocate flow");
 
     struct Node *root_node = &digraph->nodes[graph->node_count +
-                                             data->cluster_count];
+            data->cluster_count];
 
     for (int i = 0; i < data->cluster_count; i++)
     {
@@ -466,7 +457,7 @@ int find_exact_subtour_cuts_cluster_to_cluster(
             log_verbose("Sending flow from cluster %d to cluster %d\n", i, j);
 
             rval = flow_find_max_flow(digraph, capacities, from, to, flow,
-                                      &flow_value);
+                    &flow_value);
 
             abort_if(rval, "flow_find_max_flow failed");
 
@@ -490,10 +481,10 @@ int find_exact_subtour_cuts_cluster_to_cluster(
             log_verbose("Cut edges:\n");
             for (int k = 0; k < cut_edges_count; k++)
                     log_verbose("  %d %d (%d)\n", cut_edges[k]->from->index,
-                                cut_edges[k]->to->index, cut_edges[k]->index);
+                            cut_edges[k]->to->index, cut_edges[k]->index);
 
             rval = add_subtour_cut(lp, graph, 0, 0, cut_edges, cut_edges_count,
-                                   0);
+                    0);
             abort_if(rval, "add_subtour_cut failed");
 
             cuts_count++;
