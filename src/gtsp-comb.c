@@ -88,11 +88,11 @@ int add_comb_cut(
         rhs += val;
     }
 
-    log_debug("Generated cut:\n");
+    log_verbose("Generated cut:\n");
     for (int i = 0; i < nz; i++)
-            log_debug("    %.2lf x%d (%.4lf)\n", rmatval[i], rmatind[i],
+            log_verbose("    %.2lf x%d (%.4lf)\n", rmatval[i], rmatind[i],
                         x[rmatind[i]]);
-    log_debug("    %c %.2lf\n", sense, rhs);
+    log_verbose("    %c %.2lf\n", sense, rhs);
 
     if (OPTIMAL_X)
     {
@@ -202,8 +202,6 @@ int find_teeth(
         int *teeth,
         int *tooth_count)
 {
-    int rval = 0;
-
     const int node_count = graph->node_count;
     const int edge_count = graph->edge_count;
 
@@ -239,8 +237,7 @@ int find_teeth(
         (*tooth_count)++;
     }
 
-    CLEANUP:
-    return rval;
+    return 0;
 }
 
 int write_shrunken_graph(
@@ -392,7 +389,10 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
                            component_sizes);
     abort_if(rval, "find_components failed");
 
+    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
     int original_cut_pool_size = lp->cut_pool_size;
+    #endif
+
     for (int i = 0; i < cluster_count; i++)
     {
         if (component_sizes[i] < 3) continue;
@@ -414,12 +414,9 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
         rval = add_comb_cut(lp, data->graph, i, data->clusters, components,
                             component_sizes, teeth, tooth_count, x);
         abort_if(rval, "add_comb_cut failed");
-
     }
-    int added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
 
-    if(added_cuts_count > 0)
-        log_debug("    %d combs\n", added_cuts_count);
+    log_debug("    %d combs\n", lp->cut_pool_size - original_cut_pool_size);
 
     CLEANUP:
     graph_free(&shrunken_graph);
