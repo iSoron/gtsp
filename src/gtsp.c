@@ -9,21 +9,8 @@
 #include "flow.h"
 #include "branch_and_cut.h"
 #include "gtsp-subtour.h"
-#include "gtsp-comb.h"
 
 double *OPTIMAL_X = 0;
-
-static int get_edge_num(int node_count, int from, int to)
-{
-    int idx = node_count;
-
-    for (int k = 0; k < from; k++)
-        idx += node_count - k - 1;
-
-    idx += to - from - 1;
-
-    return idx;
-}
 
 int GTSP_init_data(struct GTSP *data)
 {
@@ -87,7 +74,7 @@ int GTSP_create_random_problem(
     abort_if(!y_coords, "could not allocate y_coords\n");
 
     rval = generate_random_clusters_2d(node_count, cluster_count, grid_size,
-                                       x_coords, y_coords, clusters);
+            x_coords, y_coords, clusters);
     abort_if(rval, "generate_random_clusters_2d failed");
 
     int curr_edge = 0;
@@ -99,7 +86,7 @@ int GTSP_create_random_problem(
             edges[curr_edge * 2] = i;
             edges[curr_edge * 2 + 1] = j;
             weights[curr_edge] = get_euclidean_distance(x_coords, y_coords, i,
-                                                        j);
+                    j);
 
             curr_edge++;
         }
@@ -161,7 +148,7 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
         int cmatind[] = {i, node_count + clusters[i]};
 
         rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
-                           &ub);
+                &ub);
         abort_if(rval, "LP_add_cols failed");
     }
 
@@ -172,7 +159,7 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
         int cmatind[] = {edges[i].from->index, edges[i].to->index};
 
         rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
-                           &ub);
+                &ub);
         abort_if(rval, "LP_add_cols failed");
     }
 
@@ -223,7 +210,6 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
             continue;
 #endif
 
-        log_debug("No additional cuts found.\n");
         break;
     }
 
@@ -286,12 +272,13 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
     return rval;
 }
 
-int GTSP_read_solution(char *filename, double **p_x)
+int GTSP_read_solution(struct GTSP *gtsp, char *filename, double **p_x)
 {
     int rval = 0;
 
     int node_count;
     int edge_count;
+    int *edge_map = 0;
 
     double *x;
 
@@ -315,6 +302,21 @@ int GTSP_read_solution(char *filename, double **p_x)
     rval = fscanf(file, "%d", &edge_count);
     abort_if(rval != 1, "invalid input format (positive edge count)");
 
+    edge_map = (int *) malloc(node_count * node_count * sizeof(int));
+    abort_if(!edge_map, "could not allocate edge_map");
+
+    int k = node_count;
+    for (int i = 0; i < node_count; i++)
+    {
+        for (int j = i + 1; j < node_count; j++)
+        {
+            if (gtsp->clusters[i] == gtsp->clusters[j]) continue;
+            edge_map[i * node_count + j] = k;
+            edge_map[j * node_count + i] = k;
+            k++;
+        }
+    }
+
     for (int i = 0; i < edge_count; i++)
     {
         int from, to, edge;
@@ -322,40 +324,132 @@ int GTSP_read_solution(char *filename, double **p_x)
         rval = fscanf(file, "%d %d %lf", &from, &to, &val);
         abort_if(rval != 3, "invalid input format (edge endpoints)");
 
-        if (from > to) swap(from, to);
-
-        edge = get_edge_num(node_count, from, to);
+        edge = edge_map[from * node_count + to];
         abort_if(edge > num_cols, "invalid edge");
 
-        x[from] += val/2;
-        x[to] += val/2;
+        x[from] += val / 2;
+        x[to] += val / 2;
         x[edge] = val;
     }
 
     for (int i = 0; i < num_cols; i++)
     {
         if (x[i] <= LP_EPSILON) continue;
-        log_debug("    x%-5d = %.2f\n", i, x[i]);
+        log_debug("    x%-5d = %.6f\n", i, x[i]);
     }
 
     *p_x = x;
     rval = 0;
 
     CLEANUP:
+    if (edge_map) free(edge_map);
     return rval;
 }
 
-static const struct option options_tab[] = {{"help",      no_argument,       0,         'h'},
-                                            {"nodes",     required_argument, 0,         'n'},
-                                            {"clusters",  required_argument, 0,         'm'},
-                                            {"grid-size", required_argument, 0,         'g'},
-                                            {"optimal",   required_argument, 0,         'x'},
-                                            {"seed",      required_argument, 0,         's'},
-                                            {(char *) 0, (int) 0,            (int *) 0, (int) 0}};
+int GTSP_check_solution(struct GTSP *data, double *x)
+{
+    int rval = 0;
+    int *cluster_mark = 0;
 
+    struct Node **stack = 0;
+    int stack_top = 0;
+
+    struct Graph *graph = data->graph;
+    const int node_count = graph->node_count;
+    const int edge_count = graph->edge_count;
+
+    cluster_mark = (int *) malloc(data->cluster_count * sizeof(int));
+    abort_if(!cluster_mark, "could not allocate cluster_mark");
+
+    stack = (struct Node **) malloc(graph->node_count * sizeof(struct Node *));
+    abort_if(!stack, "could not allocate stack");
+
+    for (int i = 0; i < node_count + edge_count; i++)
+    {
+        abort_iff(x[i] < 1.0 - LP_EPSILON && x[i] > LP_EPSILON,
+                "solution is not integral: x%d = %.4lf", i, x[i]);
+
+        abort_iff(x[i] > 1.0 + LP_EPSILON || x[i] < 0.0 - LP_EPSILON,
+                "value out of bounds: x%d = %.4lf", i, x[i]);
+    }
+
+    for (int i = 0; i < node_count; i++)
+        graph->nodes[i].mark = 0;
+
+    for (int i = 0; i < data->cluster_count; i++)
+        cluster_mark[i] = 0;
+
+    int initial;
+    for (initial = 0; initial < node_count; initial++)
+        if (x[initial] > 1.0 - LP_EPSILON) break;
+
+    abort_if(initial == node_count, "no initial node");
+
+    stack[stack_top++] = &graph->nodes[initial];
+    graph->nodes[initial].mark = 1;
+
+    while (stack_top > 0)
+    {
+        struct Node *n = stack[--stack_top];
+        cluster_mark[data->clusters[n->index]]++;
+
+        for (int i = 0; i < n->degree; i++)
+        {
+            struct Adjacency *adj = &n->adj[i];
+            struct Node *neighbor = adj->neighbor;
+
+            if (neighbor->mark) continue;
+            if (x[node_count + adj->edge->index] < LP_EPSILON) continue;
+
+            stack[stack_top++] = neighbor;
+            neighbor->mark = 1;
+        }
+    }
+
+    for (int i = 0; i < data->cluster_count; i++)
+        abort_if(cluster_mark[i] != 1, "cluster not visited exactly one time");
+
+    log_info("    solution is valid\n");
+
+    CLEANUP:
+    if (stack) free(stack);
+    if (cluster_mark) free(cluster_mark);
+    return rval;
+}
+
+int GTSP_solution_found(struct GTSP *data, double *x)
+{
+    int rval = 0;
+
+    char filename[100];
+
+    sprintf(filename, "tmp/gtsp-m%d-n%d-s%d.out", data->cluster_count,
+            data->graph->node_count, SEED);
+
+    log_info("Writting solution to file %s\n", filename);
+    rval = GTSP_write_solution(data, filename, x);
+    abort_if(rval, "GTSP_write_solution failed");
+
+    log_info("Checking solution...\n");
+    rval = GTSP_check_solution(data, x);
+    abort_if(rval, "GTSP_check_solution failed");
+
+    CLEANUP:
+    return rval;
+}
+
+static const struct option options_tab[] = {{"help", no_argument, 0, 'h'},
+        {"nodes", required_argument, 0, 'n'},
+        {"clusters", required_argument, 0, 'm'},
+        {"grid-size", required_argument, 0, 'g'},
+        {"optimal", required_argument, 0, 'x'},
+        {"seed", required_argument, 0, 's'},
+        {(char *) 0, (int) 0, (int *) 0, (int) 0}};
 static int input_node_count = -1;
 static int input_cluster_count = -1;
 static int grid_size = 100;
+
+static char input_x_filename[1000] = {0};
 
 static void GTSP_print_usage()
 {
@@ -364,9 +458,9 @@ static void GTSP_print_usage()
     printf("%4s %-13s %s\n", "-m", "--clusters", "number of clusters");
     printf("%4s %-13s %s\n", "-s", "--seed", "random seed");
     printf("%4s %-13s %s\n", "-g", "--grid-size",
-           "size of the box used for generating random points");
+            "size of the box used for generating random points");
     printf("%4s %-13s %s\n", "-x", "--optimal",
-           "file containg valid solution (used to assert validity of cuts)");
+            "file containg valid solution (used to assert validity of cuts)");
 }
 
 static int GTSP_parse_args(int argc, char **argv)
@@ -398,8 +492,7 @@ static int GTSP_parse_args(int argc, char **argv)
                 break;
 
             case 'x':
-                rval = GTSP_read_solution(optarg, &OPTIMAL_X);
-                abort_if(rval, "GTSP_read_solution failed");
+                strcpy(input_x_filename, optarg);
                 break;
 
             case 's':
@@ -408,12 +501,14 @@ static int GTSP_parse_args(int argc, char **argv)
 
             case ':':
                 fprintf(stderr, "option '-%c' requires an argument\n", optopt);
-                return 1;
+                rval = 1;
+                goto CLEANUP;
 
             case '?':
             default:
                 fprintf(stderr, "option '-%c' is invalid\n", optopt);
-                return 1;
+                rval = 1;
+                goto CLEANUP;
 
         }
     }
@@ -441,18 +536,6 @@ static int GTSP_parse_args(int argc, char **argv)
         GTSP_print_usage();
         rval = 1;
     }
-
-    CLEANUP:
-    return rval;
-}
-
-int GTSP_solution_found(struct GTSP *data, double *x)
-{
-    int rval = 0;
-
-    log_info("Writting integral solution to file gtsp.out\n");
-    rval = GTSP_write_solution(data, "gtsp.out", x);
-    abort_if(rval, "GTSP_write_solution failed");
 
     CLEANUP:
     return rval;
@@ -490,11 +573,14 @@ int GTSP_main(int argc, char **argv)
     log_info("    grid_size = %d\n", grid_size);
 
     rval = GTSP_create_random_problem(input_node_count, input_cluster_count,
-                                      grid_size, &data);
+            grid_size, &data);
     abort_if(rval, "GTSP_create_random_problem failed");
 
-    log_info("Writing random instance to file gtsp.in\n");
-    rval = GTSP_write_problem(&data, "gtsp.in");
+    char filename[100];
+    sprintf(filename, "input/gtsp-m%d-n%d-s%d.in", input_cluster_count,
+            input_node_count, SEED);
+    log_info("Writing random instance to file %s\n", filename);
+    rval = GTSP_write_problem(&data, filename);
     abort_if(rval, "GTSP_write_problem failed");
 
     bnc.best_obj_val = DBL_MAX;
@@ -505,11 +591,28 @@ int GTSP_main(int argc, char **argv)
     bnc.problem_solution_found = (int (*)(
             void *, double *)) GTSP_solution_found;
 
-    if (OPTIMAL_X)
+    double opt_val = 0.0;
+
+    if (strlen(input_x_filename) == 0)
     {
+        sprintf(input_x_filename, "optimal/gtsp-m%d-n%d-s%d.out",
+                input_cluster_count, input_node_count, SEED);
+
+        FILE *file = fopen(input_x_filename, "r");
+
+        if (!file)
+            input_x_filename[0] = 0;
+        else
+            fclose(file);
+    }
+
+    if (strlen(input_x_filename) > 0)
+    {
+        rval = GTSP_read_solution(&data, input_x_filename, &OPTIMAL_X);
+        abort_if(rval, "GTSP_read_solution failed");
+
         log_info("Optimal solution is available. Cuts will be checked.\n");
 
-        double opt_val = 0.0;
         for (int i = 0; i < data.graph->edge_count; i++)
         {
             struct Edge *e = &data.graph->edges[i];
@@ -523,9 +626,9 @@ int GTSP_main(int argc, char **argv)
     rval = BNC_init_lp(&bnc);
     abort_if(rval, "BNC_init_lp failed");
 
-    log_info("Writing LP to file gtsp.lp...\n");
-    rval = LP_write(bnc.lp, "gtsp.lp");
-    abort_if(rval, "LP_write failed");
+//    log_info("Writing LP to file gtsp.lp...\n");
+//    rval = LP_write(bnc.lp, "gtsp.lp");
+//    abort_if(rval, "LP_write failed");
 
     log_info("Starting branch-and-cut solver...\n");
     rval = BNC_solve(&bnc);
@@ -535,6 +638,13 @@ int GTSP_main(int argc, char **argv)
 
     log_info("Optimal integral solution:\n");
     log_info("    obj value = %.2lf **\n", bnc.best_obj_val);
+
+    if (OPTIMAL_X)
+    {
+        abort_iff(bnc.best_obj_val > opt_val,
+                "Solution is not optimal: %.4lf > %.4lf", bnc.best_obj_val,
+                opt_val);
+    }
 
     log_info("Branch-and-bound nodes: %d\n", BNC_NODE_COUNT);
     log_info("Max-flow calls: %d\n", FLOW_MAX_FLOW_COUNT);
