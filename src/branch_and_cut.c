@@ -81,8 +81,6 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     int rval = 0;
     double *x = (double *) NULL;
 
-    log_debug("Optimizing...\n");
-
     int is_infeasible;
     rval = LP_optimize(lp, &is_infeasible);
     abort_if(rval, "LP_optimize failed\n");
@@ -149,7 +147,10 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
             log_info("    obj val = %.2lf **\n", objval);
 
             if (bnc->problem_solution_found)
-                bnc->problem_solution_found(bnc->problem_data, bnc->best_x);
+            {
+                rval = bnc->problem_solution_found(bnc->problem_data, bnc->best_x);
+                abort_if(rval, "problem_solution_found failed");
+            }
         }
     }
     else
