@@ -9,7 +9,7 @@
 #define LOG_LEVEL_DEBUG 40
 #define LOG_LEVEL_VERBOSE 50
 
-#define LOG_LEVEL LOG_LEVEL_INFO
+#define LOG_LEVEL LOG_LEVEL_DEBUG
 
 #if LOG_LEVEL < LOG_LEVEL_VERBOSE
 #define log_verbose(...)

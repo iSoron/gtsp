@@ -8,6 +8,12 @@
 #include "lp.h"
 #include "graph.h"
 
+struct CLUSTER 
+{
+	int size;
+	int* set;
+};
+
 struct GTSP
 {
     struct Graph *graph;
@@ -17,10 +23,14 @@ struct GTSP
 
     double *x_coordinates;
     double *y_coordinates;
+    int** dist_matrix;
+    struct CLUSTER *vertex_set;
 };
 
 int GTSP_create_random_problem(
         int node_count, int cluster_count, int grid_size, struct GTSP *data);
+
+int inital_tour_value(struct GTSP *data); 
 
 void GTSP_free(struct GTSP *data);
 
@@ -35,6 +45,12 @@ int GTSP_write_problem(struct GTSP *data, char *filename);
 int GTSP_write_solution(struct GTSP *data, char *filename, double *x);
 
 int GTSP_main(int argc, char **argv);
+
+int optimize_vertex_in_cluster(int* tour, struct GTSP *data);
+
+int two_opt(int* tour, struct GTSP *data);
+
+int K_opt(int* tour, struct GTSP *data);
 
 extern double *OPTIMAL_X;
 extern double FLOW_CPU_TIME;

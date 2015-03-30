@@ -111,6 +111,21 @@ int generate_random_clusters_2d(
     return rval;
 }
 
+int generate_dist_matrix(
+		int node_count,
+        double *x_coordinates,
+        double *y_coordinates, int** dist_matrix)
+{
+	int i,j;
+    for (i = 0; i < node_count; i++){
+		for (j = 0; j < node_count; j++){
+			dist_matrix[i][j] = 
+				get_euclidean_distance(x_coordinates, y_coordinates, i, j);
+		}
+	}
+	return 0;
+}
+
 int get_euclidean_distance(
         double *x_coordinates,
         double *y_coordinates,

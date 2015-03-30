@@ -21,4 +21,8 @@ int get_euclidean_distance(
         int p1_index,
         int p2_index);
 
+int generate_dist_matrix(
+		int node_count,
+        double *x_coordinates,
+        double *y_coordinates, int** dist_matrix);
 #endif //_PROJECT_GEOMETRY_H_
