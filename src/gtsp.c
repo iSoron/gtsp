@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <float.h>
 #include <getopt.h>
+#include <math.h>
 #include "gtsp.h"
 #include "geometry.h"
 #include "util.h"
 #include "flow.h"
 #include "branch_and_cut.h"
-#include "math.h"
 #include "gtsp-subtour.h"
+#include "gtsp-comb.h"
 
 double *OPTIMAL_X = 0;
 
@@ -30,8 +31,6 @@ int GTSP_init_data(struct GTSP *data)
 
     data->clusters = 0;
     data->cluster_count = 0;
-    data->x_coordinates = 0;
-    data->y_coordinates = 0;
 
     data->graph = (struct Graph *) malloc(sizeof(struct Graph));
     abort_if(!data->graph, "could not allocate data->graph");
@@ -50,8 +49,6 @@ void GTSP_free(struct GTSP *data)
     free(data->graph);
 
     if (data->clusters) free(data->clusters);
-    if (data->x_coordinates) free(data->x_coordinates);
-    if (data->y_coordinates) free(data->y_coordinates);
 }
 
 int GTSP_create_random_problem(
@@ -90,7 +87,7 @@ int GTSP_create_random_problem(
     abort_if(!y_coords, "could not allocate y_coords\n");
 
     rval = generate_random_clusters_2d(node_count, cluster_count, grid_size,
-            x_coords, y_coords, clusters);
+                                       x_coords, y_coords, clusters);
     abort_if(rval, "generate_random_clusters_2d failed");
 
     int curr_edge = 0;
@@ -102,7 +99,7 @@ int GTSP_create_random_problem(
             edges[curr_edge * 2] = i;
             edges[curr_edge * 2 + 1] = j;
             weights[curr_edge] = get_euclidean_distance(x_coords, y_coords, i,
-                    j);
+                                                        j);
 
             curr_edge++;
         }
@@ -118,8 +115,8 @@ int GTSP_create_random_problem(
     data->graph = graph;
     data->clusters = clusters;
     data->cluster_count = cluster_count;
-    data->x_coordinates = x_coords;
-    data->y_coordinates = y_coords;
+    graph->x_coordinates = x_coords;
+    graph->y_coordinates = y_coords;
 
     CLEANUP:
     if (weights) free(weights);
@@ -164,7 +161,7 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
         int cmatind[] = {i, node_count + clusters[i]};
 
         rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
-                &ub);
+                           &ub);
         abort_if(rval, "LP_add_cols failed");
     }
 
@@ -175,7 +172,7 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
         int cmatind[] = {edges[i].from->index, edges[i].to->index};
 
         rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
-                &ub);
+                           &ub);
         abort_if(rval, "LP_add_cols failed");
     }
 
@@ -186,43 +183,48 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
 int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
 {
     int rval = 0;
-
-    int round = 0;
-
-    int violation_total = 3;
-    int violation_current = 0;
-    double violations[] = {1.0, 0.1, LP_EPSILON};
+    int current_round = 0;
 
     while (1)
     {
-        round++;
-
-        log_debug("Finding subtour cuts, round %d, violation %.4lf...\n", round,
-                violations[violation_current]);
-
-        int original_cut_pool_size = lp->cut_pool_size;
-        rval = find_exact_subtour_cuts(lp, data, violations[violation_current]);
-        abort_if(rval, "find_exact_subtour_cuts failed");
-
-        if (lp->cut_pool_size - original_cut_pool_size == 0)
+        if (current_round > 0)
         {
-            if (++violation_current < violation_total)
-            {
-                log_debug("No cuts found. Decreasing minimum cut violation.\n");
-                continue;
-            }
-            else
-            {
-                log_debug("No additional cuts found.\n");
-                break;
-            }
+            int is_infeasible;
+            rval = LP_optimize(lp, &is_infeasible);
+            abort_if(rval, "LP_optimize failed");
+
+            if (is_infeasible) break;
         }
 
-        int is_infeasible;
-        rval = LP_optimize(lp, &is_infeasible);
-        abort_if(rval, "LP_optimize failed");
+        current_round++;
 
-        if (is_infeasible) break;
+        int original_cut_pool_size;
+        int added_cuts_count;
+
+        original_cut_pool_size = lp->cut_pool_size;
+        log_debug("Finding subtour cuts, round %d...\n", current_round);
+
+        rval = find_exact_subtour_cuts(lp, data, LP_EPSILON);
+        abort_if(rval, "find_exact_subtour_cuts failed");
+
+        added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+        if (added_cuts_count > 0)
+            continue;
+
+#ifdef ENABLE_COMB_INEQUALITIES
+        original_cut_pool_size = lp->cut_pool_size;
+        log_debug("Finding comb cuts, round %d...\n", current_round);
+
+        rval = find_comb_cuts(lp, data);
+        abort_if(rval, "find_comb_cuts failed");
+
+        added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+        if (added_cuts_count > 0)
+            continue;
+#endif
+
+        log_debug("No additional cuts found.\n");
+        break;
     }
 
     CLEANUP:
@@ -238,12 +240,14 @@ int GTSP_write_problem(struct GTSP *data, char *filename)
     file = fopen(filename, "w");
     abort_if(!file, "could not open file");
 
-    fprintf(file, "%d %d\n", data->graph->node_count, data->cluster_count);
+    const struct Graph *graph = data->graph;
 
-    for (int i = 0; i < data->graph->node_count; i++)
+    fprintf(file, "%d %d\n", graph->node_count, data->cluster_count);
+
+    for (int i = 0; i < graph->node_count; i++)
     {
-        fprintf(file, "%.2lf %.2lf %d\n", data->x_coordinates[i],
-                data->y_coordinates[i], data->clusters[i]);
+        fprintf(file, "%.2lf %.2lf %d\n", graph->x_coordinates[i],
+                graph->y_coordinates[i], data->clusters[i]);
     }
 
     CLEANUP:
@@ -314,23 +318,24 @@ int GTSP_read_solution(char *filename, double **p_x)
     for (int i = 0; i < edge_count; i++)
     {
         int from, to, edge;
-        rval = fscanf(file, "%d %d", &from, &to);
-        abort_if(rval != 2, "invalid input format (edge endpoints)");
+        double val;
+        rval = fscanf(file, "%d %d %lf", &from, &to, &val);
+        abort_if(rval != 3, "invalid input format (edge endpoints)");
 
         if (from > to) swap(from, to);
 
         edge = get_edge_num(node_count, from, to);
         abort_if(edge > num_cols, "invalid edge");
 
-        x[from] += 0.5;
-        x[to] += 0.5;
-        x[edge] = 1;
+        x[from] += val/2;
+        x[to] += val/2;
+        x[edge] = val;
     }
 
     for (int i = 0; i < num_cols; i++)
     {
         if (x[i] <= LP_EPSILON) continue;
-        log_debug(" x%-3d = %.2f\n", i, x[i]);
+        log_debug("    x%-5d = %.2f\n", i, x[i]);
     }
 
     *p_x = x;
@@ -340,13 +345,13 @@ int GTSP_read_solution(char *filename, double **p_x)
     return rval;
 }
 
-static const struct option options_tab[] = {{"help", no_argument, 0, 'h'},
-        {"nodes", required_argument, 0, 'n'},
-        {"clusters", required_argument, 0, 'm'},
-        {"grid-size", required_argument, 0, 'g'},
-        {"optimal", required_argument, 0, 'x'},
-        {"seed", required_argument, 0, 's'},
-        {(char *) 0, (int) 0, (int *) 0, (int) 0}};
+static const struct option options_tab[] = {{"help",      no_argument,       0,         'h'},
+                                            {"nodes",     required_argument, 0,         'n'},
+                                            {"clusters",  required_argument, 0,         'm'},
+                                            {"grid-size", required_argument, 0,         'g'},
+                                            {"optimal",   required_argument, 0,         'x'},
+                                            {"seed",      required_argument, 0,         's'},
+                                            {(char *) 0, (int) 0,            (int *) 0, (int) 0}};
 
 static int input_node_count = -1;
 static int input_cluster_count = -1;
@@ -359,9 +364,9 @@ static void GTSP_print_usage()
     printf("%4s %-13s %s\n", "-m", "--clusters", "number of clusters");
     printf("%4s %-13s %s\n", "-s", "--seed", "random seed");
     printf("%4s %-13s %s\n", "-g", "--grid-size",
-            "size of the box used for generating random points");
+           "size of the box used for generating random points");
     printf("%4s %-13s %s\n", "-x", "--optimal",
-            "file containg valid solution (used to assert validity of cuts)");
+           "file containg valid solution (used to assert validity of cuts)");
 }
 
 static int GTSP_parse_args(int argc, char **argv)
@@ -485,7 +490,7 @@ int GTSP_main(int argc, char **argv)
     log_info("    grid_size = %d\n", grid_size);
 
     rval = GTSP_create_random_problem(input_node_count, input_cluster_count,
-            grid_size, &data);
+                                      grid_size, &data);
     abort_if(rval, "GTSP_create_random_problem failed");
 
     log_info("Writing random instance to file gtsp.in\n");

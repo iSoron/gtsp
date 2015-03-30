@@ -1,7 +1,3 @@
-//
-// Created by isoron on 18/03/15.
-//
-
 #ifndef _PROJECT_GTSP_H_
 #define _PROJECT_GTSP_H_
 
@@ -14,9 +10,6 @@ struct GTSP
 
     int *clusters;
     int cluster_count;
-
-    double *x_coordinates;
-    double *y_coordinates;
 };
 
 int GTSP_create_random_problem(

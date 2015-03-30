@@ -2,14 +2,13 @@
 #define _PROJECT_UTIL_H_
 
 #include <string.h>
+#include "params.h"
 
 #define LOG_LEVEL_ERROR 10
 #define LOG_LEVEL_WARNING 20
 #define LOG_LEVEL_INFO 30
 #define LOG_LEVEL_DEBUG 40
 #define LOG_LEVEL_VERBOSE 50
-
-#define LOG_LEVEL LOG_LEVEL_INFO
 
 #if LOG_LEVEL < LOG_LEVEL_VERBOSE
 #define log_verbose(...)

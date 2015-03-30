@@ -165,10 +165,11 @@ int LP_optimize(struct LP *lp, int *infeasible)
 
     *infeasible = 0;
 
+    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
     int numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
     int numcols = CPXgetnumcols(lp->cplex_env, lp->cplex_lp);
-
     log_debug("Optimizing LP (%d rows %d cols)...\n", numrows, numcols);
+    #endif
 
     double time_before = get_current_time();
     rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
@@ -298,7 +299,7 @@ int LP_remove_old_cuts(struct LP *lp)
 
     if (count > 0)
     {
-        log_info("Found and removed %d old cuts\n", count);
+        log_debug("Found and removed %d old cuts\n", count);
         rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
         abort_if(rval, "CPXoptimize failed");
     }
@@ -364,6 +365,7 @@ int LP_write(struct LP *lp, const char *fname)
 int compare_cuts(struct Row *cut1, struct Row *cut2)
 {
     return_if_neq(cut1->nz, cut2->nz);
+    assert(cut1->nz == cut2->nz);
 
     for (int i = 0; i < cut1->nz; i++)
     {
