@@ -58,7 +58,6 @@ int GTSP_create_random_problem(
     struct Graph *graph = 0;
 
     int edge_count = (node_count * (node_count - 1)) / 2;
-http://ns-webapp-b.private.uwaterloo.ca/wifisetup/index.html?cmd=login&switchip=fd74:6b6a:8eca:402::6&mac=44:6d:57:16:be:2a&ip=2620:101:f000:701::5d3c:2c75&essid=uw-wifi-setup-no-encrypt&apname=ENG-AP-E5-5--E&apgroup=E5&url=http%3A%2F%2Fwww%2Egstatic%2Ecom%2Fgenerate_204
     graph = (struct Graph *) malloc(sizeof(struct Graph));
     abort_if(!graph, "could not allocate graph\n");
 
@@ -619,11 +618,14 @@ int GTSP_main(int argc, char **argv)
 	int init_val ;
 	
 	init_val = inital_tour_value(&data);
+    log_info("Writing random instance to file gtsp.in\n");
+    rval = GTSP_write_problem(&data, "gtsp.in");
 
     char filename[100];
     sprintf(filename, "input/gtsp-m%d-n%d-s%d.in", input_cluster_count,
             input_node_count, SEED);
     log_info("Writing random instance to file %s\n", filename);
+
     rval = GTSP_write_problem(&data, filename);
     abort_if(rval, "GTSP_write_problem failed");
 
@@ -883,7 +885,7 @@ int Larg_neighborhood_search(int* tour, struct GTSP *data){
 
 	
 	//LNS starts
-	for(int iter = 0; iter < 500; iter++){
+	for(int iter = 0; iter < 1000; iter++){
 		//Delete a vertex
 		int delete_vertex = rand()%(data->cluster_count - 1) + 1;
 
