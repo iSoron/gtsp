@@ -11,6 +11,8 @@ void graph_init(struct Graph *graph)
     graph->adj = 0;
     graph->node_count = 0;
     graph->edge_count = 0;
+    graph->x_coordinates = 0;
+    graph->y_coordinates = 0;
 }
 
 void graph_free(struct Graph *graph)
@@ -20,6 +22,8 @@ void graph_free(struct Graph *graph)
     if (graph->edges) free(graph->edges);
     if (graph->nodes) free(graph->nodes);
     if (graph->adj) free(graph->adj);
+    if (graph->x_coordinates) free(graph->x_coordinates);
+    if (graph->y_coordinates) free(graph->y_coordinates);
 }
 
 int graph_build(
@@ -86,7 +90,7 @@ int graph_build(
             n = &graph->nodes[b];
             n->adj[n->degree].neighbor_index = a;
             n->adj[n->degree].edge_index = i;
-            n->adj[n->degree].neighbor = &graph->nodes[b];
+            n->adj[n->degree].neighbor = &graph->nodes[a];
             n->adj[n->degree].edge = &graph->edges[i];
             n->degree++;
         }

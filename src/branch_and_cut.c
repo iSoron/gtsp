@@ -85,8 +85,6 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     int rval = 0;
     double *x = (double *) NULL;
 
-    log_debug("Optimizing...\n");
-
     int is_infeasible;
     rval = LP_optimize(lp, &is_infeasible);
     abort_if(rval, "LP_optimize failed\n");
@@ -104,7 +102,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     if (ceil(objval) > *best_val + LP_EPSILON)
     {
         log_debug("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
-                *best_val);
+                  *best_val);
         rval = 0;
         goto CLEANUP;
     }
@@ -129,7 +127,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
         if (ceil(objval) > *best_val + LP_EPSILON)
         {
             log_debug("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
-                    *best_val);
+                      *best_val);
             rval = 0;
             goto CLEANUP;
         }
@@ -153,7 +151,10 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
             log_info("    obj val = %.2lf **\n", objval);
 
             if (bnc->problem_solution_found)
-                bnc->problem_solution_found(bnc->problem_data, bnc->best_x);
+            {
+                rval = bnc->problem_solution_found(bnc->problem_data, bnc->best_x);
+                abort_if(rval, "problem_solution_found failed");
+            }
         }
     }
     else
@@ -178,7 +179,7 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
     int best_branch_var = BNC_find_best_branching_var(x, num_cols);
 
     log_debug("Branching on variable x%d = %.6lf (depth %d)...\n",
-            best_branch_var, x[best_branch_var], depth);
+              best_branch_var, x[best_branch_var], depth);
 
     log_debug("Fixing variable x%d to one...\n", best_branch_var);
     rval = LP_change_bound(lp, best_branch_var, 'L', 1.0);
@@ -208,11 +209,17 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
 
 static int BNC_is_integral(double *x, int num_cols)
 {
+#ifdef ALLOW_FRACTIONAL_SOLUTIONS
+    UNUSED(num_cols);
+    UNUSED(x);
+    return 1;
+#else
     for (int i = 0; i < num_cols; i++)
         if (x[i] > LP_EPSILON && x[i] < 1.0 - LP_EPSILON)
             return 0;
 
     return 1;
+#endif
 }
 
 static int BNC_find_best_branching_var(double *x, int num_cols)
