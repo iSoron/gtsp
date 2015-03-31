@@ -90,24 +90,27 @@ int add_comb_cut(
 
 #if LOG_LEVEL >= LOG_LEVEL_DEBUG
     log_debug("Generated cut:\n");
-    for (int i = 0; i < nz; i++)
+    if(OPTIMAL_X)
     {
-        if (OPTIMAL_X[rmatind[i]] < LP_EPSILON) continue;
+        for (int i = 0; i < nz; i++)
+        {
+            if (OPTIMAL_X[rmatind[i]] < LP_EPSILON) continue;
 
-        if (rmatind[i] >= node_count)
-        {
-            struct Edge *e = &graph->edges[rmatind[i] - node_count];
-            log_debug("    %.2lf x%d (%d %d %.4lf)\n", rmatval[i], rmatind[i],
-                    e->from->index, e->to->index, OPTIMAL_X[rmatind[i]]);
+            if (rmatind[i] >= node_count)
+            {
+                struct Edge *e = &graph->edges[rmatind[i] - node_count];
+                log_debug("    %.2lf x%d (%d %d %.4lf)\n", rmatval[i], rmatind[i],
+                        e->from->index, e->to->index, OPTIMAL_X[rmatind[i]]);
+            }
+            else
+            {
+                log_debug("    %.2lf x%d (%.4lf)\n", rmatval[i], rmatind[i],
+                        OPTIMAL_X[rmatind[i]]);
+            }
         }
-        else
-        {
-            log_debug("    %.2lf x%d (%.4lf)\n", rmatval[i], rmatind[i],
-                    OPTIMAL_X[rmatind[i]]);
-        }
+        log_debug("    %c %.2lf\n", sense, rhs);
     }
-    log_debug("    %c %.2lf\n", sense, rhs);
-    #endif
+#endif
 
     if (OPTIMAL_X)
     {
