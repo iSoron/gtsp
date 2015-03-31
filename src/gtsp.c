@@ -492,8 +492,10 @@ int GTSP_check_solution(struct GTSP *data, double *x)
     return rval;
 }
 
-int GTSP_solution_found(struct GTSP *data, double *x)
+int GTSP_solution_found(struct BNC *bnc, struct GTSP *data, double *x)
 {
+    UNUSED(bnc);
+
     int rval = 0;
 
     char filename[100];
@@ -653,17 +655,6 @@ int GTSP_main(int argc, char **argv)
             grid_size, &data);
     abort_if(rval, "GTSP_create_random_problem failed");
 
-    int init_val;
-
-    initial_x = (double*) malloc((data.graph->node_count + data.graph->edge_count) * sizeof(double));
-    abort_if(!initial_x, "could not allocate initial_x");
-
-    rval = inital_tour_value(&data, &init_val, initial_x);
-    abort_if(rval, "initial_tour_value failed");
-
-    rval = GTSP_solution_found(&data, initial_x);
-    abort_if(rval, "check_sol failed");
-
     char filename[100];
     sprintf(filename, "input/gtsp-m%d-n%d-s%d.in", input_cluster_count,
             input_node_count, SEED);
@@ -676,13 +667,24 @@ int GTSP_main(int argc, char **argv)
     rval = GTSP_write_problem(&data, "gtsp.in");
     #endif
 
+    int init_val;
+
+    initial_x = (double*) malloc((data.graph->node_count + data.graph->edge_count) * sizeof(double));
+    abort_if(!initial_x, "could not allocate initial_x");
+
+    rval = inital_tour_value(&data, &init_val, initial_x);
+    abort_if(rval, "initial_tour_value failed");
+
+    rval = GTSP_solution_found(&bnc, &data, initial_x);
+    abort_if(rval, "check_sol failed");
+
     bnc.best_x = initial_x;
     bnc.best_obj_val = init_val;
     bnc.problem_data = (void *) &data;
     bnc.problem_init_lp = (int (*)(struct LP *, void *)) GTSP_init_lp;
     bnc.problem_add_cutting_planes = (int (*)(
             struct LP *, void *)) GTSP_add_cutting_planes;
-    bnc.problem_solution_found = (int (*)(
+    bnc.problem_solution_found = (int (*)(struct BNC*,
             void *, double *)) GTSP_solution_found;
 
     double opt_val = 0.0;
@@ -773,7 +775,6 @@ int build_x_from_tour(struct GTSP *data, int *tour, double *x)
 
     for (int i = 0; i < data->cluster_count; i++)
     {
-//        log_debug("    %d %d\n", tour[i], tour[i+1]);
         int from = tour[i];
         int to = tour[i + 1];
 

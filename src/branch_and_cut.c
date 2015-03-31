@@ -152,7 +152,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
 
             if (bnc->problem_solution_found)
             {
-                rval = bnc->problem_solution_found(bnc->problem_data, bnc->best_x);
+                rval = bnc->problem_solution_found(bnc, bnc->problem_data, bnc->best_x);
                 abort_if(rval, "problem_solution_found failed");
             }
         }

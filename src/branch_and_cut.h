@@ -18,7 +18,7 @@ struct BNC
 
     int (*problem_add_cutting_planes)(struct LP *, void *);
 
-    int (*problem_solution_found)(void *data, double *x);
+    int (*problem_solution_found)(struct BNC*, void *data, double *x);
 };
 
 int BNC_init(struct BNC *bnc);
