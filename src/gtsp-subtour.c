@@ -56,7 +56,7 @@ int static build_flow_digraph(
     for (int i = 0; i < node_count; i++)
     {
         struct Node *n = &graph->nodes[i];
-        int cl = data->clusters[n->index];
+        int cl = data->node_to_cluster[n->index];
 
         digraph_edges[ke++] = n->index;
         digraph_edges[ke++] = node_count + cl;
@@ -260,7 +260,7 @@ int find_exact_subtour_cuts_node_to_node(
     double *flow = 0;
 
     struct Graph *graph = data->graph;
-    int *clusters = data->clusters;
+    int *clusters = data->node_to_cluster;
 
     cut_edges = (struct Edge **) malloc(
             graph->edge_count * sizeof(struct Edge *));
@@ -344,7 +344,7 @@ int find_exact_subtour_cuts_node_to_cluster(
     double *flow = 0;
 
     struct Graph *graph = data->graph;
-    int *clusters = data->clusters;
+    int *clusters = data->node_to_cluster;
 
     cut_edges = (struct Edge **) malloc(
             graph->edge_count * sizeof(struct Edge *));

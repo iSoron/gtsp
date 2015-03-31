@@ -248,10 +248,10 @@ int re_optimize_integral(struct BNC *bnc){
 	int node_count = data->graph->node_count;
 	int cluster_count = data->cluster_count;
 	int edge_count = data->graph->edge_count;
-	struct TOUR * tour = (struct TOUR*) NULL;
+	struct Tour * tour = (struct Tour*) NULL;
 	
 	//intialize the tour
-	tour = (struct TOUR *) malloc( cluster_count * sizeof(struct TOUR));
+	tour = (struct Tour *) malloc( cluster_count * sizeof(struct Tour));
 	for (i = 0; i < edge_count; i++){
 		tour[i].vertex = -1;
 		tour[i].next = -1;
@@ -312,20 +312,20 @@ int optimize_vertex_in_cluster(struct BNC *bnc, double best_val)
 	
 	//reoptmizing the your with two-opt
 	//rval = two_opt(cluster_count, tour, data->dist_matrix);
-	//Optimizing the vertices inside the clusters
+	//Optimizing the vertices inside the node_to_cluster
 	int current_cluster = 0;
 	int insertion_cost = 0;
 	
 	//printf("    o-- val = %.2lf **\n", best_val);
 	for(i = 1; i < cluster_count - 2; i++){
 		//printf("    vertex in tour = %d **\n", tour[current_vertex]);
-		current_cluster = data->clusters[tour[i]];
+		current_cluster = data->node_to_cluster[tour[i]];
 		//printf("    o-- val = %.2lf **\n", best_val);
 		insertion_cost = data->dist_matrix[tour[i-1]][tour[i]] +
 			data->dist_matrix[tour[i]][tour[i+1]];
 		//printf("    o-- val = %.2lf **\n", best_val);
 		for(j = 0; j < node_count; j++)
-			if (current_cluster == data->clusters[j])
+			if (current_cluster == data->node_to_cluster[j])
 				if (insertion_cost > data->dist_matrix[j][tour[i]] +
 			data->dist_matrix[j][tour[i+1]]){
 				log_info("Optmize vertex in cluster improved the bound\n"); 

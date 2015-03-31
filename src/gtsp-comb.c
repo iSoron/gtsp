@@ -72,7 +72,7 @@ int add_comb_cut(
 //    {
 //        double val;
 //        struct Node *n = &graph->nodes[i];
-//        int c = clusters[n->index];
+//        int c = node_to_cluster[n->index];
 //
 //        if (components[c] == current_component)
 //            val = (teeth[c] < 0 ? 1.0 : 0.0);
@@ -273,7 +273,7 @@ static int shrink_clusters(
     double *y_coords = 0;
     int *cluster_sizes = 0;
 
-    const int *clusters = data->clusters;
+    const int *clusters = data->node_to_cluster;
     const int cluster_count = data->cluster_count;
     const struct Graph *graph = data->graph;
 
@@ -429,7 +429,7 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
 
         if (tooth_count % 2 == 0) continue;
 
-        rval = add_comb_cut(lp, data->graph, i, data->clusters, components,
+        rval = add_comb_cut(lp, data->graph, i, data->node_to_cluster, components,
                 component_sizes, teeth, tooth_count, x);
         abort_if(rval, "add_comb_cut failed");
     }

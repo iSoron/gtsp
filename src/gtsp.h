@@ -5,26 +5,34 @@
 #include "graph.h"
 #include "branch_and_cut.h"
 
-struct CLUSTER 
+struct Tour
+{
+    int vertex;
+    int next;
+    int prev;
+};
+
+struct Cluster
 {
 	int size;
-	int* set;
+	int* nodes;
 };
 
 struct GTSP
 {
     struct Graph *graph;
 
-    int *clusters;
-    int cluster_count;
     int** dist_matrix;
-    struct CLUSTER *vertex_set;
+
+    int cluster_count;
+    int *node_to_cluster;
+    struct Cluster *clusters;
 };
 
 int GTSP_create_random_problem(
         int node_count, int cluster_count, int grid_size, struct GTSP *data);
 
-int inital_tour_value(struct GTSP *data); 
+int inital_tour_value(struct GTSP *data, int *value);
 
 void GTSP_free(struct GTSP *data);
 
@@ -40,9 +48,9 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x);
 
 int GTSP_main(int argc, char **argv);
 
-int optimize_vertex_in_cluster(struct TOUR * tour, struct GTSP *data);
+int optimize_vertex_in_cluster(struct Tour * tour, struct GTSP *data);
 
-int two_opt(struct TOUR* tour, struct GTSP *data);
+int two_opt(struct Tour * tour, struct GTSP *data);
 
 int K_opt(int* tour, struct GTSP *data);
 
@@ -50,9 +58,9 @@ int tour_length(int* tour, struct GTSP* data);
 
 void print_tour(int* tour, struct GTSP* data);
 
-int list_length(struct TOUR* tour, struct GTSP* data);
+int list_length(struct Tour * tour, struct GTSP* data);
 
-void print_list(struct TOUR * tour, struct GTSP* data);
+void print_list(struct Tour * tour, struct GTSP* data);
 
 extern double *OPTIMAL_X;
 extern double FLOW_CPU_TIME;

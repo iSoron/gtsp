@@ -3,12 +3,6 @@
 
 #include "lp.h"
 
-struct TOUR {
-	int vertex;
-	int next;
-	int prev;
-	};
-
 struct BNC
 {
     struct LP *lp;
@@ -40,6 +34,5 @@ int re_optimize_integral(struct BNC *bnc);
 //int optimize_vertex_in_cluster(struct BNC *bnc, double best_val);
 
 extern int BNC_NODE_COUNT;
-
 
 #endif //_PROJECT_BRANCH_AND_CUT_H_
