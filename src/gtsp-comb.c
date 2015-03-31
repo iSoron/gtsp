@@ -45,7 +45,7 @@ int add_comb_cut(
         rmatval[nz] = -1.0;
         nz++;
 
-        log_debug("  handle (%d %d)\n", e->from->index, e->to->index);
+        log_verbose("  handle (%d %d)\n", e->from->index, e->to->index);
     }
 
     // Edges inside each tooth
@@ -60,7 +60,7 @@ int add_comb_cut(
         if (teeth[clusters[from->index]] != teeth[clusters[to->index]])
             continue;
 
-        log_debug("  tooth (%d %d)\n", e->from->index, e->to->index);
+        log_verbose("  tooth (%d %d)\n", e->from->index, e->to->index);
 
         rmatind[nz] = node_count + e->index;
         rmatval[nz] = -1.0;
@@ -90,7 +90,7 @@ int add_comb_cut(
 
 #if LOG_LEVEL >= LOG_LEVEL_DEBUG
     log_debug("Generated cut:\n");
-    if(OPTIMAL_X)
+    if (OPTIMAL_X)
     {
         for (int i = 0; i < nz; i++)
         {
@@ -99,8 +99,9 @@ int add_comb_cut(
             if (rmatind[i] >= node_count)
             {
                 struct Edge *e = &graph->edges[rmatind[i] - node_count];
-                log_debug("    %.2lf x%d (%d %d %.4lf)\n", rmatval[i], rmatind[i],
-                        e->from->index, e->to->index, OPTIMAL_X[rmatind[i]]);
+                log_debug("    %.2lf x%d (%d %d %.4lf)\n", rmatval[i],
+                        rmatind[i], e->from->index, e->to->index,
+                        OPTIMAL_X[rmatind[i]]);
             }
             else
             {
@@ -203,13 +204,13 @@ int find_components(
     for (int i = 0; i < node_count; i++)
         component_sizes[components[i]]++;
 
-    log_debug("Components:\n");
+    log_verbose("Components:\n");
     for (int i = 0; i < graph->node_count; i++)
-            log_debug("    %d %d\n", i, components[i]);
+        log_verbose("    %d %d\n", i, components[i]);
 
-    log_debug("Component sizes:\n");
+    log_verbose("Component sizes:\n");
     for (int i = 0; i < graph->node_count; i++)
-            log_debug("    %d %d\n", i, component_sizes[i]);
+        log_verbose("    %d %d\n", i, component_sizes[i]);
 
     CLEANUP:
     if (stack) free(stack);
@@ -433,7 +434,13 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
             log_debug("    %d %d\n", j, teeth[j]);
         }
 
-        if (tooth_count % 2 == 0) continue;
+        if (tooth_count % 2 == 0)
+        {
+            for (int i = 0; i < cluster_count; i++)
+                if (teeth[i] == tooth_count - 1) teeth[i] = -1;
+
+            tooth_count--;
+        }
 
         rval = add_comb_cut(lp, data->graph, i, data->node_to_cluster,
                 components, component_sizes, teeth, tooth_count, x);
