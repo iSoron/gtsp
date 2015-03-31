@@ -3,10 +3,10 @@
 #include <getopt.h>
 #include <math.h>
 #include <assert.h>
+#include <sys/stat.h>
 #include "gtsp.h"
 #include "geometry.h"
 #include "util.h"
-#include "flow.h"
 #include "gtsp-subtour.h"
 #include "gtsp-comb.h"
 
@@ -618,11 +618,6 @@ static int GTSP_parse_args(int argc, char **argv)
     return rval;
 }
 
-double FLOW_CPU_TIME = 0;
-double LP_SOLVE_TIME = 0;
-double LP_CUT_POOL_TIME = 0;
-int LP_OPTIMIZE_COUNT = 0;
-
 int GTSP_main(int argc, char **argv)
 {
     int rval = 0;
@@ -631,8 +626,9 @@ int GTSP_main(int argc, char **argv)
     struct GTSP data;
 
     double *initial_x = 0;
+    double initial_time = get_current_time();
 
-    SEED = (unsigned int) get_real_time() % 1000000;
+    SEED = (unsigned int) get_real_time() % 1000;
 
     rval = GTSP_init_data(&data);
     abort_if(rval, "GTSP_init_data failed");
@@ -651,25 +647,29 @@ int GTSP_main(int argc, char **argv)
     log_info("    input_cluster_count = %d\n", input_cluster_count);
     log_info("    grid_size = %d\n", grid_size);
 
+    char instance_name[1000];
+    sprintf(instance_name, "gtsp-m%d-n%d-s%d", input_cluster_count,
+            input_node_count, SEED);
+
     rval = GTSP_create_random_problem(input_node_count, input_cluster_count,
             grid_size, &data);
     abort_if(rval, "GTSP_create_random_problem failed");
 
     char filename[100];
-    sprintf(filename, "input/gtsp-m%d-n%d-s%d.in", input_cluster_count,
-            input_node_count, SEED);
+    sprintf(filename, "input/%s.in", instance_name);
     log_info("Writing random instance to file %s\n", filename);
     rval = GTSP_write_problem(&data, filename);
     abort_if(rval, "GTSP_write_problem failed");
 
-    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
+#if LOG_LEVEL >= LOG_LEVEL_DEBUG
     log_info("Writing random instance to file gtsp.in\n");
     rval = GTSP_write_problem(&data, "gtsp.in");
     #endif
 
     int init_val;
 
-    initial_x = (double*) malloc((data.graph->node_count + data.graph->edge_count) * sizeof(double));
+    initial_x = (double *) malloc(
+            (data.graph->node_count + data.graph->edge_count) * sizeof(double));
     abort_if(!initial_x, "could not allocate initial_x");
 
     rval = inital_tour_value(&data, &init_val, initial_x);
@@ -684,15 +684,14 @@ int GTSP_main(int argc, char **argv)
     bnc.problem_init_lp = (int (*)(struct LP *, void *)) GTSP_init_lp;
     bnc.problem_add_cutting_planes = (int (*)(
             struct LP *, void *)) GTSP_add_cutting_planes;
-    bnc.problem_solution_found = (int (*)(struct BNC*,
-            void *, double *)) GTSP_solution_found;
+    bnc.problem_solution_found = (int (*)(
+            struct BNC *, void *, double *)) GTSP_solution_found;
 
     double opt_val = 0.0;
 
     if (strlen(input_x_filename) == 0)
     {
-        sprintf(input_x_filename, "optimal/gtsp-m%d-n%d-s%d.out",
-                input_cluster_count, input_node_count, SEED);
+        sprintf(input_x_filename, "optimal/%s.out", instance_name);
 
         FILE *file = fopen(input_x_filename, "r");
 
@@ -742,12 +741,64 @@ int GTSP_main(int argc, char **argv)
                 opt_val);
     }
 
+    TOTAL_TIME = get_current_time() - initial_time;
+
     log_info("Branch-and-bound nodes: %d\n", BNC_NODE_COUNT);
-    log_info("Max-flow calls: %d\n", FLOW_MAX_FLOW_COUNT);
-    log_info("Max-flow computation time: %.2lf\n", FLOW_CPU_TIME);
-    log_info("LP optimize calls: %d\n", LP_OPTIMIZE_COUNT);
+    log_info("LP optimize calls: %d\n", LP_SOLVE_COUNT);
     log_info("LP solving time: %.2lf\n", LP_SOLVE_TIME);
-    log_info("LP cut pool management time: %.2lf\n", LP_CUT_POOL_TIME);
+    log_info("LP cut pool management time: %.2lf\n", CUT_POOL_TIME);
+
+    FILE *file = fopen("stats.tab", "a");
+    abort_if(!file, "could not open stats.tab");
+
+
+    struct stat st;
+    stat("stats.tab", &st);
+
+    if(st.st_size == 0)
+    {
+        fprintf(file, "%-20s  ", "instance");
+        fprintf(file, "%-8s  ", "time");
+        fprintf(file, "%-8s  ", "subt-t");
+        fprintf(file, "%-8s  ", "combs-t");
+        fprintf(file, "%-8s  ", "pool-t");
+        fprintf(file, "%-8s  ", "pool-m");
+        fprintf(file, "%-8s  ", "lp-count");
+        fprintf(file, "%-8s  ", "lp-time");
+        fprintf(file, "%-8s  ", "lp-rows");
+        fprintf(file, "%-8s  ", "lp-cols");
+        fprintf(file, "%-8s  ", "init-v");
+        fprintf(file, "%-8s  ", "opt-v");
+        fprintf(file, "%-8s  ", "root-v");
+        fprintf(file, "%-8s  ", "nodes");
+        fprintf(file, "%-8s  ", "subt-cc");
+        fprintf(file, "%-8s  ", "subt-nc");
+        fprintf(file, "%-8s  ", "subt-nn");
+        fprintf(file, "%-8s  ", "combs");
+
+        fprintf(file, "\n");
+    }
+
+    fprintf(file, "%-20s  ", instance_name);
+    fprintf(file, "%-8.2lf  ", TOTAL_TIME);
+    fprintf(file, "%-8.2lf  ", SUBTOUR_TIME);
+    fprintf(file, "%-8.2lf  ", COMBS_TIME);
+    fprintf(file, "%-8.2lf  ", CUT_POOL_TIME);
+    fprintf(file, "%-8ld  ", CUT_POOL_MAX_MEMORY/1024/1024);
+    fprintf(file, "%-8d  ", LP_SOLVE_COUNT);
+    fprintf(file, "%-8.2lf  ", LP_SOLVE_TIME);
+    fprintf(file, "%-8d  ", LP_MAX_ROWS);
+    fprintf(file, "%-8d  ", LP_MAX_COLS);
+    fprintf(file, "%-8d  ", init_val);
+    fprintf(file, "%-8.0lf  ", bnc.best_obj_val);
+    fprintf(file, "%-8.0lf  ", ROOT_VALUE);
+    fprintf(file, "%-8d  ", BNC_NODE_COUNT);
+    fprintf(file, "%-8d  ", SUBTOUR_CLUSTER_CLUSTER_COUNT);
+    fprintf(file, "%-8d  ", SUBTOUR_NODE_CLUSTER_COUNT);
+    fprintf(file, "%-8d  ", SUBTOUR_NODE_NODE_COUNT);
+    fprintf(file, "%-8d  ", COMBS_COUNT);
+    fprintf(file, "\n");
+    fclose(file);
 
     CLEANUP:
     if (OPTIMAL_X) free(OPTIMAL_X);

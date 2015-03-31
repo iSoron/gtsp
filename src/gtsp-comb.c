@@ -206,11 +206,11 @@ int find_components(
 
     log_verbose("Components:\n");
     for (int i = 0; i < graph->node_count; i++)
-        log_verbose("    %d %d\n", i, components[i]);
+            log_verbose("    %d %d\n", i, components[i]);
 
     log_verbose("Component sizes:\n");
     for (int i = 0; i < graph->node_count; i++)
-        log_verbose("    %d %d\n", i, component_sizes[i]);
+            log_verbose("    %d %d\n", i, component_sizes[i]);
 
     CLEANUP:
     if (stack) free(stack);
@@ -370,6 +370,7 @@ static int shrink_clusters(
 int find_comb_cuts(struct LP *lp, struct GTSP *data)
 {
     int rval = 0;
+    double initial_time = get_current_time();
 
     double *x = 0;
     double *shrunken_x = 0;
@@ -414,9 +415,7 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
             component_sizes);
     abort_if(rval, "find_components failed");
 
-#if LOG_LEVEL >= LOG_LEVEL_DEBUG
     int original_cut_pool_size = lp->cut_pool_size;
-#endif
 
     for (int i = 0; i < cluster_count; i++)
     {
@@ -447,7 +446,11 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
         abort_if(rval, "add_comb_cut failed");
     }
 
-    log_debug("    %d combs\n", lp->cut_pool_size - original_cut_pool_size);
+    int added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+    log_debug("    %d combs\n", added_cuts_count);
+
+    COMBS_TIME += get_current_time() - initial_time;
+    COMBS_COUNT += added_cuts_count;
 
     CLEANUP:
     graph_free(&shrunken_graph);

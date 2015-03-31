@@ -25,8 +25,6 @@ int flow_mark_reachable_nodes(
 
 int flow_main(int argc, char **argv);
 
-extern int FLOW_MAX_FLOW_COUNT;
-
 #include "graph.h"
 
 #endif //_PROJECT_FLOW_H_

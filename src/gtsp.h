@@ -62,7 +62,5 @@ int list_length(struct Tour * tour, struct GTSP* data);
 
 void print_list(struct Tour * tour, struct GTSP* data);
 
-extern double *OPTIMAL_X;
-extern double FLOW_CPU_TIME;
 
 #endif //_PROJECT_GTSP_H_

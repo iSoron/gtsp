@@ -4,7 +4,7 @@
 #include "util.h"
 #include "flow.h"
 
-extern double FLOW_CPU_TIME;
+extern double SUBTOUR_TIME;
 
 int static build_flow_digraph(
         struct GTSP *data, double *x, struct Graph *digraph, double *capacities)
@@ -178,6 +178,7 @@ int find_exact_subtour_cuts(
 
     double *x = 0;
     double *capacities = 0;
+    double initial_time = get_current_time();
 
     int added_cuts_count = 0;
     struct Graph *graph = data->graph;
@@ -214,6 +215,7 @@ int find_exact_subtour_cuts(
 
     added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
     log_debug("    %d cluster-to-cluster\n", added_cuts_count);
+    SUBTOUR_CLUSTER_CLUSTER_COUNT += added_cuts_count;
     if (added_cuts_count > 0)
         goto CLEANUP;
 
@@ -225,6 +227,7 @@ int find_exact_subtour_cuts(
 
     added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
     log_debug("    %d node-to-cluster\n", added_cuts_count);
+    SUBTOUR_NODE_CLUSTER_COUNT += added_cuts_count;
     if (added_cuts_count > 0)
         goto CLEANUP;
 
@@ -236,8 +239,11 @@ int find_exact_subtour_cuts(
 
     added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
     log_debug("    %d node-to-node\n", added_cuts_count);
+    SUBTOUR_NODE_NODE_COUNT += added_cuts_count;
     if (added_cuts_count > 0)
         goto CLEANUP;
+
+    SUBTOUR_TIME += get_current_time() - initial_time;
 
     CLEANUP:
     graph_free(&digraph);

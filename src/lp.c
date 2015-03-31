@@ -5,6 +5,7 @@
 #include <assert.h>
 #include "lp.h"
 #include "util.h"
+#include "main.h"
 
 int LP_open(struct LP *lp)
 {
@@ -158,9 +159,9 @@ int LP_change_bound(struct LP *lp, int col, char lower_or_upper, double bnd)
     return rval;
 }
 
-extern int LP_OPTIMIZE_COUNT;
+extern int LP_SOLVE_COUNT;
 extern double LP_SOLVE_TIME;
-extern double LP_CUT_POOL_TIME;
+extern double CUT_POOL_TIME;
 
 int LP_update_cut_ages(struct LP *lp)
 {
@@ -196,26 +197,30 @@ int LP_update_cut_ages(struct LP *lp)
     return rval;
 }
 
+
+
 int LP_optimize(struct LP *lp, int *infeasible)
 {
-    LP_OPTIMIZE_COUNT++;
+    LP_SOLVE_COUNT++;
 
     int rval = 0, solstat;
 
     *infeasible = 0;
 
-#if LOG_LEVEL >= LOG_LEVEL_DEBUG
     int numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
     int numcols = CPXgetnumcols(lp->cplex_env, lp->cplex_lp);
-    log_debug("Optimizing LP (%d rows %d cols)...\n", numrows, numcols);
-#endif
 
-    double time_before = get_current_time();
+    if(numrows > LP_MAX_ROWS) LP_MAX_ROWS = numrows;
+    if(numrows > LP_MAX_COLS) LP_MAX_COLS = numcols;
+
+    log_debug("Optimizing LP (%d rows %d cols)...\n", numrows, numcols);
+
+    double initial_time = get_current_time();
+
     rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
     abort_if(rval, "CPXdualopt failed");
 
-    double time_after = get_current_time();
-    LP_SOLVE_TIME += time_after - time_before;
+    LP_SOLVE_TIME += get_current_time() - initial_time;
 
     solstat = CPXgetstat(lp->cplex_env, lp->cplex_lp);
     if (solstat == CPX_STAT_INFEASIBLE)
@@ -234,9 +239,9 @@ int LP_optimize(struct LP *lp, int *infeasible)
     abort_if(rval, "LP_get_obj_val failed");
 
     log_debug("    obj val = %.4lf\n", objval);
-    log_debug("    time = %.4lf\n", time_after - time_before);
+    log_debug("    time = %.4lf\n", get_current_time() - initial_time);
 
-    time_before = get_current_time();
+    initial_time = get_current_time();
     rval = LP_update_cut_ages(lp);
     abort_if(rval, "LP_update_cut_ages failed");
 
@@ -244,8 +249,7 @@ int LP_optimize(struct LP *lp, int *infeasible)
     rval = LP_remove_old_cuts(lp);
     abort_if(rval, "LP_remove_old_cuts failed");
 
-    time_after = get_current_time();
-    LP_CUT_POOL_TIME += time_after - time_before;
+    CUT_POOL_TIME += get_current_time() - initial_time;
 
     CLEANUP:
     return rval;
@@ -352,6 +356,9 @@ int LP_remove_old_cuts(struct LP *lp)
 
     log_debug("    %ld cuts (%ld nz, %ld MiB)\n", lp->cut_pool_size, nz, size/1024/1024);
 
+    if(size > CUT_POOL_MAX_MEMORY)
+        CUT_POOL_MAX_MEMORY = size;
+
     CLEANUP:
     if (should_remove) free(should_remove);
     return rval;
@@ -426,8 +433,8 @@ int compare_cuts(struct Row *cut1, struct Row *cut2)
 int LP_add_cut(struct LP *lp, struct Row *cut)
 {
     int rval = 0;
+    double initial_time = get_current_time();
 
-    double time_before = get_current_time();
     rval = LP_update_hash(cut);
     abort_if(rval, "LP_update_hash failed");
 
@@ -458,9 +465,7 @@ int LP_add_cut(struct LP *lp, struct Row *cut)
     cut->cplex_row_index = CPXgetnumrows(lp->cplex_env, lp->cplex_lp) - 1;
     cut->age = 0;
 
-    double time_after = get_current_time();
-    LP_CUT_POOL_TIME += time_after - time_before;
-
+    CUT_POOL_TIME += get_current_time() - initial_time;
     CLEANUP:
     return rval;
 }

@@ -99,6 +99,8 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     rval = LP_get_obj_val(lp, &objval);
     abort_if(rval, "LP_get_obj_val failed\n");
 
+    if(depth == 1) ROOT_VALUE = objval;
+
     if (ceil(objval) > *best_val + LP_EPSILON)
     {
         log_debug("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
@@ -123,6 +125,8 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
 
         rval = LP_get_obj_val(lp, &objval);
         abort_if(rval, "LP_get_obj_val failed");
+
+        if(depth == 1) ROOT_VALUE = objval;
 
         if (ceil(objval) > *best_val + LP_EPSILON)
         {
