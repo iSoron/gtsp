@@ -2,14 +2,13 @@
 #define _PROJECT_UTIL_H_
 
 #include <string.h>
+#include "params.h"
 
 #define LOG_LEVEL_ERROR 10
 #define LOG_LEVEL_WARNING 20
 #define LOG_LEVEL_INFO 30
 #define LOG_LEVEL_DEBUG 40
 #define LOG_LEVEL_VERBOSE 50
-
-#define LOG_LEVEL LOG_LEVEL_DEBUG
 
 #if LOG_LEVEL < LOG_LEVEL_VERBOSE
 #define log_verbose(...)
@@ -42,7 +41,11 @@
 #endif
 
 #define abort_if(cond, msg) if(cond) { \
-    fprintf(stderr, "%20s:%d " msg "\n", __FILE__, __LINE__); \
+    fprintf(stderr, "%28s:%d " msg "\n", __FILE__, __LINE__); \
+    rval = 1; goto CLEANUP; }
+
+#define abort_iff(cond, msg, ...) if(cond) { \
+    fprintf(stderr, "%28s:%d " msg "\n", __FILE__, __LINE__, __VA_ARGS__); \
     rval = 1; goto CLEANUP; }
 
 #define swap(x, y) do \

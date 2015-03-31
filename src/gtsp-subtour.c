@@ -143,7 +143,7 @@ int static add_subtour_cut(
 
     log_verbose("Generated cut:\n");
     for (int i = 0; i < newnz; i++)
-            log_verbose("%8.2f x%d\n", rmatval[i], rmatind[i]);
+            log_verbose("    %8.2f x%d\n", rmatval[i], rmatind[i]);
     log_verbose("    %c %.2lf\n", sense, rhs);
 
     if (OPTIMAL_X)
@@ -213,12 +213,9 @@ int find_exact_subtour_cuts(
     abort_if(rval, "find_exact_subtour_cuts_cluster_to_cluster failed");
 
     added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+    log_debug("    %d cluster-to-cluster\n", added_cuts_count);
     if (added_cuts_count > 0)
-    {
-        log_debug("Added %d cluster-to-cluster subtour cuts\n",
-                added_cuts_count);
         goto CLEANUP;
-    }
 
     // Constraints (2.2)
     original_cut_pool_size = lp->cut_pool_size;
@@ -227,11 +224,9 @@ int find_exact_subtour_cuts(
     abort_if(rval, "find_exact_subtour_cuts_node_to_cluster failed");
 
     added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+    log_debug("    %d node-to-cluster\n", added_cuts_count);
     if (added_cuts_count > 0)
-    {
-        log_debug("Added %d node-to-cluster subtour cuts\n", added_cuts_count);
         goto CLEANUP;
-    }
 
     // Constraints (2.3)
     original_cut_pool_size = lp->cut_pool_size;
@@ -240,11 +235,9 @@ int find_exact_subtour_cuts(
     abort_if(rval, "find_exact_subtour_cuts_node_to_node failed");
 
     added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+    log_debug("    %d node-to-node\n", added_cuts_count);
     if (added_cuts_count > 0)
-    {
-        log_debug("Added %d node-to-node subtour cuts\n", added_cuts_count);
         goto CLEANUP;
-    }
 
     CLEANUP:
     graph_free(&digraph);

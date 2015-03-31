@@ -41,6 +41,9 @@ struct Graph
     struct Edge *edges;
     struct Node *nodes;
 
+    double *x_coordinates;
+    double *y_coordinates;
+
     struct Adjacency *adj;
 };
 

@@ -165,10 +165,11 @@ int LP_optimize(struct LP *lp, int *infeasible)
 
     *infeasible = 0;
 
+#if LOG_LEVEL >= LOG_LEVEL_DEBUG
     int numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
     int numcols = CPXgetnumcols(lp->cplex_env, lp->cplex_lp);
-
     log_debug("Optimizing LP (%d rows %d cols)...\n", numrows, numcols);
+#endif
 
     double time_before = get_current_time();
     rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
@@ -228,7 +229,7 @@ int LP_remove_old_cuts(struct LP *lp)
 
     log_verbose("Old cplex row index:\n");
     for (int i = 0; i < lp->cut_pool_size; i++)
-        log_verbose("    %d\n", lp->cut_pool[i]->cplex_row_index);
+            log_verbose("    %d\n", lp->cut_pool[i]->cplex_row_index);
 
     log_verbose("Should remove:\n");
     for (int i = 0; i < lp->cut_pool_size; i++)
@@ -250,7 +251,7 @@ int LP_remove_old_cuts(struct LP *lp)
         {
             struct Row *cut = lp->cut_pool[j];
 
-            if (cut->cplex_row_index == i - count) cut->cplex_row_index = 0;
+            if (cut->cplex_row_index == i - count) cut->cplex_row_index = -1;
             else if (cut->cplex_row_index > i - count) cut->cplex_row_index--;
         }
 
@@ -259,7 +260,7 @@ int LP_remove_old_cuts(struct LP *lp)
 
     log_verbose("New cplex row index:\n");
     for (int i = 0; i < lp->cut_pool_size; i++)
-        log_verbose("    %d\n", lp->cut_pool[i]->cplex_row_index);
+            log_verbose("    %d\n", lp->cut_pool[i]->cplex_row_index);
 
     int start = 0;
     int end = -1;
@@ -298,7 +299,7 @@ int LP_remove_old_cuts(struct LP *lp)
 
     if (count > 0)
     {
-        log_info("Found and removed %d old cuts\n", count);
+        log_debug("Found and removed %d old cuts\n", count);
         rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
         abort_if(rval, "CPXoptimize failed");
     }
@@ -388,6 +389,9 @@ int LP_add_cut(struct LP *lp, struct Row *cut)
         if (lp->cut_pool[i]->hash != cut->hash) continue;
         if (!compare_cuts(lp->cut_pool[i], cut))
         {
+            log_verbose("Discarding duplicate cut (same as cplex row %d)\n",
+                    lp->cut_pool[i]->cplex_row_index);
+
             free(cut->rmatval);
             free(cut->rmatind);
             free(cut);
