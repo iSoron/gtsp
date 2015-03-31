@@ -583,6 +583,9 @@ int GTSP_main(int argc, char **argv)
     rval = GTSP_write_problem(&data, filename);
     abort_if(rval, "GTSP_write_problem failed");
 
+    rval = GTSP_write_problem(&data, "gtsp.in");
+    abort_if(rval, "GTSP_write_problem failed");
+
     bnc.best_obj_val = DBL_MAX;
     bnc.problem_data = (void *) &data;
     bnc.problem_init_lp = (int (*)(struct LP *, void *)) GTSP_init_lp;
@@ -641,7 +644,7 @@ int GTSP_main(int argc, char **argv)
 
     if (OPTIMAL_X)
     {
-        abort_iff(bnc.best_obj_val > opt_val,
+        abort_iff(bnc.best_obj_val - LP_EPSILON > opt_val,
                 "Solution is not optimal: %.4lf > %.4lf", bnc.best_obj_val,
                 opt_val);
     }

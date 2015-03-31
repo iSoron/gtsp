@@ -1,6 +1,6 @@
-#include <assert.h>
 #include "gtsp.h"
 #include "util.h"
+#include <assert.h>
 
 int add_comb_cut(
         struct LP *lp,
@@ -30,7 +30,7 @@ int add_comb_cut(
     abort_if(!rmatval, "could not allocate rmatval");
 
     double rhs = -component_sizes[current_component] - tooth_count +
-                 (tooth_count + 1) / 2;
+            (tooth_count + 1) / 2;
 
     int nz = 0;
 
@@ -45,7 +45,7 @@ int add_comb_cut(
         rmatval[nz] = -1.0;
         nz++;
 
-        log_verbose("  handle (%d %d)\n", e->from->index, e->to->index);
+        log_debug("  handle (%d %d)\n", e->from->index, e->to->index);
     }
 
     // Edges inside each tooth
@@ -60,45 +60,61 @@ int add_comb_cut(
         if (teeth[clusters[from->index]] != teeth[clusters[to->index]])
             continue;
 
-        log_verbose("  tooth (%d %d)\n", e->from->index, e->to->index);
+        log_debug("  tooth (%d %d)\n", e->from->index, e->to->index);
 
         rmatind[nz] = node_count + e->index;
         rmatval[nz] = -1.0;
         nz++;
     }
 
-    // Lifting of the nodes
-    for (int i = 0; i < node_count; i++)
-    {
-        double val;
-        struct Node *n = &graph->nodes[i];
-        int c = clusters[n->index];
+//    // Lifting of the nodes
+//    for (int i = 0; i < node_count; i++)
+//    {
+//        double val;
+//        struct Node *n = &graph->nodes[i];
+//        int c = clusters[n->index];
+//
+//        if (components[c] == current_component)
+//            val = (teeth[c] < 0 ? 1.0 : 0.0);
+//        else
+//            val = (teeth[c] < 0 ? 0.0 : 0.0);
+//
+//        if (val == 0.0) continue;
+//
+//        rmatind[nz] = n->index;
+//        rmatval[nz] = val;
+//        nz++;
+//
+//        rhs = val;
+//    }
 
-        if (components[c] == current_component)
-            val = (teeth[c] < 0 ? 1.0 : 2.0);
-        else
-            val = (teeth[c] < 0 ? 0.0 : 1.0);
-
-        if (val == 0.0) continue;
-
-        rmatind[nz] = n->index;
-        rmatval[nz] = val;
-        nz++;
-
-        rhs += val;
-    }
-
-    log_verbose("Generated cut:\n");
+    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
+    log_debug("Generated cut:\n");
     for (int i = 0; i < nz; i++)
-            log_verbose("    %.2lf x%d (%.4lf)\n", rmatval[i], rmatind[i],
-                        x[rmatind[i]]);
-    log_verbose("    %c %.2lf\n", sense, rhs);
+    {
+        if (OPTIMAL_X[rmatind[i]] < LP_EPSILON) continue;
+
+        if (rmatind[i] >= node_count)
+        {
+            struct Edge *e = &graph->edges[rmatind[i] - node_count];
+            log_debug("    %.2lf x%d (%d %d %.4lf)\n", rmatval[i], rmatind[i],
+                    e->from->index, e->to->index, OPTIMAL_X[rmatind[i]]);
+        }
+        else
+        {
+            log_debug("    %.2lf x%d (%.4lf)\n", rmatval[i], rmatind[i],
+                    OPTIMAL_X[rmatind[i]]);
+        }
+    }
+    log_debug("    %c %.2lf\n", sense, rhs);
+    #endif
 
     if (OPTIMAL_X)
     {
         double sum = 0;
         for (int i = 0; i < nz; i++)
             sum += rmatval[i] * OPTIMAL_X[rmatind[i]];
+        log_debug("%.2lf >= %.2lf\n", sum, rhs);
         abort_if(sum <= rhs - LP_EPSILON, "cannot add invalid cut");
     }
 
@@ -106,7 +122,7 @@ int add_comb_cut(
     for (int i = 0; i < nz; i++)
         lhs += rmatval[i] * x[rmatind[i]];
 
-    log_verbose("Violation: %.4lf >= %.4lf\n", lhs, rhs);
+    log_debug("Violation: %.4lf >= %.4lf\n", lhs, rhs);
 
     if (lhs + LP_EPSILON > rhs) goto CLEANUP;
 
@@ -181,13 +197,13 @@ int find_components(
     for (int i = 0; i < node_count; i++)
         component_sizes[components[i]]++;
 
-    log_verbose("Components:\n");
+    log_debug("Components:\n");
     for (int i = 0; i < graph->node_count; i++)
-            log_verbose("    %d %d\n", i, components[i]);
+        log_debug("    %d %d\n", i, components[i]);
 
-    log_verbose("Component sizes:\n");
+    log_debug("Component sizes:\n");
     for (int i = 0; i < graph->node_count; i++)
-            log_verbose("    %d %d\n", i, component_sizes[i]);
+        log_debug("    %d %d\n", i, component_sizes[i]);
 
     CLEANUP:
     if (stack) free(stack);
@@ -374,8 +390,10 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
     rval = shrink_clusters(data, x, &shrunken_graph, shrunken_x);
     abort_if(rval, "shrink_clusters failed");
 
+#if LOG_LEVEL >= LOG_LEVEL_DEBUG
     rval = write_shrunken_graph(shrunken_x, &shrunken_graph, cluster_count);
     abort_if(rval, "write_shrunken_graph failed");
+#endif
 
     teeth = (int *) malloc(cluster_count * sizeof(int));
     components = (int *) malloc(cluster_count * sizeof(int));
@@ -386,12 +404,12 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
     abort_if(!component_sizes, "could not allocate component_sizes");
 
     rval = find_components(&shrunken_graph, shrunken_x, components,
-                           component_sizes);
+            component_sizes);
     abort_if(rval, "find_components failed");
 
-    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
+#if LOG_LEVEL >= LOG_LEVEL_DEBUG
     int original_cut_pool_size = lp->cut_pool_size;
-    #endif
+#endif
 
     for (int i = 0; i < cluster_count; i++)
     {
@@ -399,20 +417,20 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
 
         int tooth_count;
         rval = find_teeth(&shrunken_graph, shrunken_x, i, components, teeth,
-                          &tooth_count);
+                &tooth_count);
         abort_if(rval, "find_teeth failed");
 
-        log_verbose("Component %d has %d teeth:\n", i, tooth_count);
+        log_debug("Component %d has %d teeth:\n", i, tooth_count);
         for (int j = 0; j < cluster_count; j++)
         {
             if (teeth[j] < 0) continue;
-            log_verbose("    %d %d\n", j, teeth[j]);
+            log_debug("    %d %d\n", j, teeth[j]);
         }
 
         if (tooth_count % 2 == 0) continue;
 
         rval = add_comb_cut(lp, data->graph, i, data->clusters, components,
-                            component_sizes, teeth, tooth_count, x);
+                component_sizes, teeth, tooth_count, x);
         abort_if(rval, "add_comb_cut failed");
     }
 
