@@ -88,7 +88,7 @@ int add_comb_cut(
 //        rhs = val;
 //    }
 
-    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
+#if LOG_LEVEL >= LOG_LEVEL_DEBUG
     log_debug("Generated cut:\n");
     for (int i = 0; i < nz; i++)
     {
@@ -124,7 +124,12 @@ int add_comb_cut(
 
     log_debug("Violation: %.4lf >= %.4lf\n", lhs, rhs);
 
-    if (lhs + LP_EPSILON > rhs) goto CLEANUP;
+    if (lhs + LP_EPSILON > rhs)
+    {
+        free(rmatind);
+        free(rmatval);
+        goto CLEANUP;
+    }
 
     cut = (struct Row *) malloc(sizeof(struct Row));
     abort_if(!cut, "could not allocate cut");
@@ -139,8 +144,6 @@ int add_comb_cut(
     abort_if(rval, "LP_add_cut failed");
 
     CLEANUP:
-    if (rmatind) free(rmatind);
-    if (rmatval) free(rmatval);
     return rval;
 }
 
@@ -199,11 +202,11 @@ int find_components(
 
     log_debug("Components:\n");
     for (int i = 0; i < graph->node_count; i++)
-        log_debug("    %d %d\n", i, components[i]);
+            log_debug("    %d %d\n", i, components[i]);
 
     log_debug("Component sizes:\n");
     for (int i = 0; i < graph->node_count; i++)
-        log_debug("    %d %d\n", i, component_sizes[i]);
+            log_debug("    %d %d\n", i, component_sizes[i]);
 
     CLEANUP:
     if (stack) free(stack);
@@ -429,8 +432,8 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
 
         if (tooth_count % 2 == 0) continue;
 
-        rval = add_comb_cut(lp, data->graph, i, data->node_to_cluster, components,
-                component_sizes, teeth, tooth_count, x);
+        rval = add_comb_cut(lp, data->graph, i, data->node_to_cluster,
+                components, component_sizes, teeth, tooth_count, x);
         abort_if(rval, "add_comb_cut failed");
     }
 
