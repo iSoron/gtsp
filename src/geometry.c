@@ -76,7 +76,7 @@ int generate_random_clusters_2d(
         int grid_size,
         double *x_coordinates,
         double *y_coordinates,
-        int *clusters)
+        int *node_to_cluster)
 {
     int rval = 0;
 
@@ -85,7 +85,7 @@ int generate_random_clusters_2d(
     abort_if(rval, "generate_random_points_2d failed");
 
     for (int i = 0; i < cluster_count; i++)
-        clusters[i] = i;
+        node_to_cluster[i] = i;
 
     for (int i = cluster_count; i < node_count; i++)
     {
@@ -104,7 +104,7 @@ int generate_random_clusters_2d(
             }
         }
 
-        clusters[i] = closest_point;
+        node_to_cluster[i] = closest_point;
     }
 
     CLEANUP:

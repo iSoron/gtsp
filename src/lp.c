@@ -33,6 +33,14 @@ void LP_free(struct LP *lp)
 
     CPXcloseCPLEX(&lp->cplex_env);
     lp->cplex_env = 0;
+
+    for (int i = 0; i < lp->cut_pool_size; i++)
+    {
+        free(lp->cut_pool[i]->rmatind);
+        free(lp->cut_pool[i]->rmatval);
+        free(lp->cut_pool[i]);
+    }
+
     if (lp->cut_pool) free(lp->cut_pool);
 }
 

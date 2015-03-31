@@ -13,7 +13,7 @@ int generate_random_clusters_2d(
         int grid_size,
         double *x_coordinates,
         double *y_coordinates,
-        int *clusters);
+        int *node_to_cluster);
 
 int get_euclidean_distance(
         double *x_coordinates,

@@ -442,6 +442,7 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
     if (components) free(components);
     if (component_sizes) free(component_sizes);
     if (shrunken_x) free(shrunken_x);
+    if (x) free(x);
     return rval;
 }
 
