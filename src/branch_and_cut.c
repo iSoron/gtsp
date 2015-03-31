@@ -149,8 +149,6 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
             bnc->best_x = x;
             x = 0;
             
-            
-			
             log_info("Found a better integral solution:\n");
             log_info("    obj val = %.2lf **\n", objval);
 

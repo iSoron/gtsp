@@ -763,7 +763,7 @@ int Larg_neighborhood_search(int* tour, struct GTSP *data){
 
 	
 	//LNS starts
-	for(int iter = 0; iter < 500; iter++){
+	for(int iter = 0; iter < 1000; iter++){
 		//Delete a vertex
 		int delete_vertex = rand()%(data->cluster_count - 1) + 1;
 
