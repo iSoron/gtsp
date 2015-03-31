@@ -32,7 +32,7 @@ struct GTSP
 int GTSP_create_random_problem(
         int node_count, int cluster_count, int grid_size, struct GTSP *data);
 
-int inital_tour_value(struct GTSP *data, int *value);
+int inital_tour_value(struct GTSP *data, int *value, double *x);
 
 void GTSP_free(struct GTSP *data);
 

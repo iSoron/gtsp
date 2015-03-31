@@ -12,6 +12,8 @@
 
 int large_neighborhood_search(int *tour, struct GTSP *data, int *tour_cost);
 
+int build_edge_map(struct GTSP *gtsp, int *edge_map);
+
 double *OPTIMAL_X = 0;
 
 int GTSP_init_data(struct GTSP *data)
@@ -364,17 +366,8 @@ int GTSP_read_solution(struct GTSP *gtsp, char *filename, double **p_x)
     edge_map = (int *) malloc(node_count * node_count * sizeof(int));
     abort_if(!edge_map, "could not allocate edge_map");
 
-    int k = node_count;
-    for (int i = 0; i < node_count; i++)
-    {
-        for (int j = i + 1; j < node_count; j++)
-        {
-            if (gtsp->node_to_cluster[i] == gtsp->node_to_cluster[j]) continue;
-            edge_map[i * node_count + j] = k;
-            edge_map[j * node_count + i] = k;
-            k++;
-        }
-    }
+    rval = build_edge_map(gtsp, edge_map);
+    abort_if(rval, "build_edge_map failed");
 
     for (int i = 0; i < edge_count; i++)
     {
@@ -404,6 +397,25 @@ int GTSP_read_solution(struct GTSP *gtsp, char *filename, double **p_x)
     if (file) fclose(file);
     if (edge_map) free(edge_map);
     return rval;
+}
+
+int build_edge_map(struct GTSP *gtsp, int *edge_map)
+{
+    int node_count = gtsp->graph->node_count;
+
+    int k = node_count;
+    for (int i = 0; i < node_count; i++)
+    {
+        for (int j = i + 1; j < node_count; j++)
+        {
+            if (gtsp->node_to_cluster[i] == gtsp->node_to_cluster[j]) continue;
+            edge_map[i * node_count + j] = k;
+            edge_map[j * node_count + i] = k;
+            k++;
+        }
+    }
+
+    return 0;
 }
 
 int GTSP_check_solution(struct GTSP *data, double *x)
@@ -467,7 +479,10 @@ int GTSP_check_solution(struct GTSP *data, double *x)
     }
 
     for (int i = 0; i < data->cluster_count; i++)
-        abort_if(cluster_mark[i] != 1, "cluster not visited exactly one time");
+    {
+        abort_iff(cluster_mark[i] > 1, "cluster %d visited multiple times", i);
+        abort_iff(cluster_mark[i] < 1, "cluster %d not visited", i);
+    }
 
     log_info("    solution is valid\n");
 
@@ -613,6 +628,8 @@ int GTSP_main(int argc, char **argv)
     struct BNC bnc;
     struct GTSP data;
 
+    double *initial_x = 0;
+
     SEED = (unsigned int) get_real_time() % 1000000;
 
     rval = GTSP_init_data(&data);
@@ -637,23 +654,29 @@ int GTSP_main(int argc, char **argv)
     abort_if(rval, "GTSP_create_random_problem failed");
 
     int init_val;
-    rval = inital_tour_value(&data, &init_val);
+
+    initial_x = (double*) malloc((data.graph->node_count + data.graph->edge_count) * sizeof(double));
+    abort_if(!initial_x, "could not allocate initial_x");
+
+    rval = inital_tour_value(&data, &init_val, initial_x);
     abort_if(rval, "initial_tour_value failed");
 
-    log_info("Writing random instance to file gtsp.in\n");
-    rval = GTSP_write_problem(&data, "gtsp.in");
+    rval = GTSP_solution_found(&data, initial_x);
+    abort_if(rval, "check_sol failed");
 
     char filename[100];
     sprintf(filename, "input/gtsp-m%d-n%d-s%d.in", input_cluster_count,
             input_node_count, SEED);
     log_info("Writing random instance to file %s\n", filename);
-
     rval = GTSP_write_problem(&data, filename);
     abort_if(rval, "GTSP_write_problem failed");
 
+    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
+    log_info("Writing random instance to file gtsp.in\n");
     rval = GTSP_write_problem(&data, "gtsp.in");
-    abort_if(rval, "GTSP_write_problem failed");
+    #endif
 
+    bnc.best_x = initial_x;
     bnc.best_obj_val = init_val;
     bnc.problem_data = (void *) &data;
     bnc.problem_init_lp = (int (*)(struct LP *, void *)) GTSP_init_lp;
@@ -731,7 +754,40 @@ int GTSP_main(int argc, char **argv)
     return rval;
 }
 
-int inital_tour_value(struct GTSP *data, int *tour_cost)
+int build_x_from_tour(struct GTSP *data, int *tour, double *x)
+{
+    int rval = 0;
+    int *edge_map = 0;
+
+    int node_count = data->graph->node_count;
+    int edge_count = data->graph->edge_count;
+
+    edge_map = (int *) malloc(node_count * node_count * sizeof(int));
+    abort_if(!edge_map, "could not allocate edge_map");
+
+    rval = build_edge_map(data, edge_map);
+    abort_if(rval, "build_edge_map failed");
+
+    for (int i = 0; i < node_count + edge_count; i++)
+        x[i] = 0.0;
+
+    for (int i = 0; i < data->cluster_count; i++)
+    {
+//        log_debug("    %d %d\n", tour[i], tour[i+1]);
+        int from = tour[i];
+        int to = tour[i + 1];
+
+        x[from] = 1.0;
+        x[to] = 1.0;
+        x[edge_map[from * node_count + to]] = 1.0;
+    }
+
+    CLEANUP:
+    if (edge_map) free(edge_map);
+    return rval;
+}
+
+int inital_tour_value(struct GTSP *data, int *tour_cost, double *x)
 {
     int rval = 0;
 
@@ -791,11 +847,17 @@ int inital_tour_value(struct GTSP *data, int *tour_cost)
         new_vertex += 1;
     }
 
+    tour[data->cluster_count] = 0;
+
     rval = large_neighborhood_search(tour, data, tour_cost);
     abort_if(rval, "large_neighborhood_search failed");
 
     //tour_cost = optimize_vertex_in_cluster(tour, data);
+
     log_info("Initial upper-bound: %d \n", *tour_cost);
+
+    rval = build_x_from_tour(data, tour, x);
+    abort_if(rval, "build_x_from_tour failed");
 
     CLEANUP:
     if (tour) free(tour);
