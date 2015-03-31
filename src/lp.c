@@ -23,6 +23,18 @@ int LP_open(struct LP *lp)
     return rval;
 }
 
+void LP_free_cut_pool(struct LP *lp)
+{
+    for (int i = 0; i < lp->cut_pool_size; i++)
+    {
+        free(lp->cut_pool[i]->rmatind);
+        free(lp->cut_pool[i]->rmatval);
+        free(lp->cut_pool[i]);
+    }
+
+    if (lp->cut_pool) free(lp->cut_pool);
+}
+
 void LP_free(struct LP *lp)
 {
     if (!lp) return;
@@ -34,14 +46,33 @@ void LP_free(struct LP *lp)
     CPXcloseCPLEX(&lp->cplex_env);
     lp->cplex_env = 0;
 
+    LP_free_cut_pool(lp);
+}
+
+int LP_compress_cut_pool(struct LP *lp)
+{
+    int rval = 0;
+
+    int delete_count = 0;
     for (int i = 0; i < lp->cut_pool_size; i++)
     {
-        free(lp->cut_pool[i]->rmatind);
-        free(lp->cut_pool[i]->rmatval);
-        free(lp->cut_pool[i]);
+        if (lp->cut_pool[i]->cplex_row_index < 0)
+        {
+            free(lp->cut_pool[i]->rmatind);
+            free(lp->cut_pool[i]->rmatval);
+            free(lp->cut_pool[i]);
+            delete_count++;
+        }
+        else
+        {
+            lp->cut_pool[i - delete_count] = lp->cut_pool[i];
+        }
     }
 
-    if (lp->cut_pool) free(lp->cut_pool);
+    lp->cut_pool_size -= delete_count;
+
+    CLEANUP:
+    return rval;
 }
 
 int LP_create(struct LP *lp, const char *name)
@@ -209,6 +240,7 @@ int LP_optimize(struct LP *lp, int *infeasible)
     rval = LP_update_cut_ages(lp);
     abort_if(rval, "LP_update_cut_ages failed");
 
+    log_debug("Removing old cuts...\n");
     rval = LP_remove_old_cuts(lp);
     abort_if(rval, "LP_remove_old_cuts failed");
 
@@ -299,18 +331,26 @@ int LP_remove_old_cuts(struct LP *lp)
     numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
     log_verbose("    new numrows=%d\n", numrows);
 
+    log_debug("    removed %d old cuts\n", count);
+
+    rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
+    abort_if(rval, "CPXoptimize failed");
+
+    log_debug("Compressing cut pool...\n");
+    LP_compress_cut_pool(lp);
+
+
+    long nz = 0;
+    long size = 0;
     for (int i = 0; i < lp->cut_pool_size; i++)
     {
-        struct Row *cut = lp->cut_pool[i];
-        assert(cut->cplex_row_index < numrows);
+        size += sizeof(struct Row);
+        nz += lp->cut_pool[i]->nz;
+        size += lp->cut_pool[i]->nz * sizeof(double);
+        size += lp->cut_pool[i]->nz * sizeof(int);
     }
 
-    if (count > 0)
-    {
-        log_debug("Found and removed %d old cuts\n", count);
-        rval = CPXdualopt(lp->cplex_env, lp->cplex_lp);
-        abort_if(rval, "CPXoptimize failed");
-    }
+    log_debug("    %ld cuts (%ld nz, %ld MiB)\n", lp->cut_pool_size, nz, size/1024/1024);
 
     CLEANUP:
     if (should_remove) free(should_remove);
