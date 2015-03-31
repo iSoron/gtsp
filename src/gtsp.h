@@ -7,6 +7,7 @@
 
 #include "lp.h"
 #include "graph.h"
+#include "branch_and_cut.h"
 
 struct CLUSTER 
 {
@@ -46,11 +47,19 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x);
 
 int GTSP_main(int argc, char **argv);
 
-int optimize_vertex_in_cluster(int* tour, struct GTSP *data);
+int optimize_vertex_in_cluster(struct TOUR * tour, struct GTSP *data);
 
-int two_opt(int* tour, struct GTSP *data);
+int two_opt(struct TOUR* tour, struct GTSP *data);
 
 int K_opt(int* tour, struct GTSP *data);
+
+int tour_length(int* tour, struct GTSP* data);
+
+void print_tour(int* tour, struct GTSP* data);
+
+int list_length(struct TOUR* tour, struct GTSP* data);
+
+void print_list(struct TOUR * tour, struct GTSP* data);
 
 extern double *OPTIMAL_X;
 extern double FLOW_CPU_TIME;

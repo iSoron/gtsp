@@ -73,7 +73,7 @@ int GTSP_create_random_problem(
     struct Graph *graph = 0;
 
     int edge_count = (node_count * (node_count - 1)) / 2;
-
+http://ns-webapp-b.private.uwaterloo.ca/wifisetup/index.html?cmd=login&switchip=fd74:6b6a:8eca:402::6&mac=44:6d:57:16:be:2a&ip=2620:101:f000:701::5d3c:2c75&essid=uw-wifi-setup-no-encrypt&apname=ENG-AP-E5-5--E&apgroup=E5&url=http%3A%2F%2Fwww%2Egstatic%2Ecom%2Fgenerate_204
     graph = (struct Graph *) malloc(sizeof(struct Graph));
     abort_if(!graph, "could not allocate graph\n");
 
@@ -631,76 +631,78 @@ int inital_tour_value(struct GTSP *data)
 		new_vertex += 1;
 	}
 	
-		
-	tour_cost = optimize_vertex_in_cluster(tour, data);	
+	
+
+	
+	
+	tour_cost = Larg_neighborhood_search(tour, data);	
+	//tour_cost = optimize_vertex_in_cluster(tour, data);	
 	log_info("Initial upper-bound: %d \n", tour_cost);
 	return tour_cost;		
 }
 
 
 
-int optimize_vertex_in_cluster(int* tour, struct GTSP *data)
+int optimize_vertex_in_cluster(struct TOUR * tour, struct GTSP *data)
 {
-	
-	int i = 0 , j, current_cluster;
-	int insertion_cost = 0;
-	int rval = 0;
-	rval = two_opt(tour, data);
+	int i = 0 , j, current_cluster, tour_cost;
+	int insertion_cost = 1000000;
+	int rval = 0;	
+
 	if(rval)
-		printf("Two opt local search stopped unexpectedly");
-	//rval = K_opt(tour, data);
-	
-	for(i = 1; i < data->cluster_count - 2; i++){
-		current_cluster = data->clusters[tour[i]];
-		insertion_cost = data->dist_matrix[tour[i-1]][tour[i]] +
-			data->dist_matrix[tour[i]][tour[i+1]];
-		current_cluster = data->clusters[i];
+		printf("Larg_neighborhood_search stopped unexpectedly");
+		
+	for(i = 0; i < data->cluster_count ; i++){
+		int vertex = tour[i].vertex;
+		int prev_vertex = tour[tour[i].prev].vertex;
+		int next_vertex = tour[tour[i].next].vertex;
+		
+		current_cluster = data->clusters[vertex];
+		insertion_cost = data->dist_matrix[prev_vertex][vertex] +
+			data->dist_matrix[vertex][next_vertex];
+		
 		for(j = 0; j < data->vertex_set[current_cluster].size; j++){
-				int vertex = data->vertex_set[current_cluster].set[j];
-				if (insertion_cost > data->dist_matrix[vertex][tour[i]] +
-					data->dist_matrix[vertex][tour[i+1]]){
-				insertion_cost = data->dist_matrix[vertex][tour[i]] +
-			data->dist_matrix[vertex][tour[i+1]];
-			tour[i] = vertex;
-			}
+				int vertex_in_cluster = data->vertex_set[current_cluster].set[j];
+				int cost = data->dist_matrix[vertex_in_cluster][prev_vertex] +
+					data->dist_matrix[vertex_in_cluster][next_vertex];
+				if (insertion_cost > cost){
+					insertion_cost = cost;
+					tour[i].vertex = vertex_in_cluster;
+				}
 		}
 	}
-	int tour_cost = 0;
-	for(i = 0; i< data->cluster_count ; i++){
-		if (i == data->cluster_count - 1)
-			tour_cost += data->dist_matrix[tour[i]][tour[0]];
-		else
-			tour_cost += data->dist_matrix[tour[i]][tour[i+1]];
-	}
-	return tour_cost;
+	
+	return 0;
 }
 
-int two_opt(int* tour, struct GTSP *data){
+int two_opt(struct TOUR* tour, struct GTSP *data){
+	
 	int rval = 0, i;
 	for (i = 0; i < data->cluster_count; i++){
-		int vertex1 = i;
-		int vertex2 = i - 1;
-		int vertex3 = i + 1;
-		int vertex4 = i + 2;
-		if(i == 0)
-			vertex2 = data->cluster_count - 1;
-		
-		if(i == data->cluster_count-2)
-			vertex4 = 0;
-		
-		if(i == data->cluster_count-1){
-			vertex3 = 0;
-			vertex4 = 1;
-		}	
+		int vertex1 = tour[i].vertex;
+		int vertex2 = tour[tour[i].prev].vertex;
+		int vertex3 = tour[tour[i].next].vertex;
+		int vertex4 = tour[tour[tour[i].next].next].vertex;
 
-		int current_cost = data->dist_matrix[tour[vertex2]][tour[vertex1]] + 
-		data->dist_matrix[tour[vertex3]][tour[vertex4]];
-		int temp_cost = data->dist_matrix[tour[vertex2]][tour[vertex3]] + 
-		data->dist_matrix[tour[vertex1]][tour[vertex4]];
+		int current_cost = data->dist_matrix[vertex2][vertex1] + 
+		data->dist_matrix[vertex3][vertex4];
+		
+		int temp_cost = data->dist_matrix[vertex2][vertex3] + 
+		data->dist_matrix[vertex1][vertex4];
 		if(current_cost > temp_cost){
-			int temp_vertex = tour[vertex1];
-			tour[vertex1] = tour[vertex3];
-			tour[vertex3] = temp_vertex;
+			int temp_next = tour[i].next;
+			int temp_prev = tour[i].prev;
+			
+			tour[i].next = tour[temp_next].next;
+			tour[i].prev = temp_next;
+			
+			tour[tour[temp_next].next].prev = i;
+			
+			tour[temp_next].next = i;
+			tour[temp_next].prev = temp_prev;
+			
+			tour[temp_prev].next = temp_next;
+			
 		}
 	}
 	return rval;
@@ -738,38 +740,119 @@ int K_opt(int* tour, struct GTSP *data){
 	}
 	return rval;
 }*/
-/*
+
 int Larg_neighborhood_search(int* tour, struct GTSP *data){
-	int i ;
-	struct TOUR* vertex_seq;
+	int i, best_vertex, best_pose, tour_cost, rval; 
+	struct TOUR *vertex_seq;
 	vertex_seq = (struct TOUR*) malloc(data->cluster_count*sizeof(struct TOUR));
-	for(i = 0; i<data->cluster_count; i++){
+	
+	//Construct the list	
+	for(i = 0; i < data->cluster_count; i++){
 		vertex_seq[i].vertex = tour[i];
 		if ( i == 0){
-			vertex_seq[i].prev = tour[data->cluster_count-1];
+			vertex_seq[i].prev = data->cluster_count-1;
 		}else{
-			vertex_seq[i].prev = tour[i - 1];
+			vertex_seq[i].prev = i - 1;
 		}
 		if ( i == data->cluster_count-1){
-			vertex_seq[i].next = tour[0];
+			vertex_seq[i].next = 0;
 		}else{
-			vertex_seq[i].next = tour[i+1];
+			vertex_seq[i].next = i + 1;
 		}
 	}
-	//Delete a vertex
-	int delete_vertex = rand()%(data->cluster_count - 1) + 1;
-	int prev_vertex = vertex_seq[delete_vertex].prev;
-	int next_vertex = vertex_seq[delete_vertex].next;
-	vertex_seq[prev_vertex].next = next_vertex;
-	vertex_seq[next_vertex].prev = prev_vertex;
-	int cluster_to_insert = data->clusters[vertex_seq[delete_vertex].vertex];
-	int min_cost = 10000000;
-	for(i =0 ; i < data->vertex_set[cluster_to_insert].size ; i++){
-		int current_vertex = data->vertex_set[cluster_to_insert].set[i];
-		for(int j = 0; j < data->cluster_count - 1; j++){
+
+	
+	//LNS starts
+	for(int iter = 0; iter < 500; iter++){
+		//Delete a vertex
+		int delete_vertex = rand()%(data->cluster_count - 1) + 1;
+
+		int prev_vertex = vertex_seq[delete_vertex].prev;
+		int next_vertex = vertex_seq[delete_vertex].next;
+		
+		vertex_seq[prev_vertex].next = next_vertex;
+		vertex_seq[next_vertex].prev = prev_vertex;
+		
+		int cluster_to_insert = data->clusters[vertex_seq[delete_vertex].vertex];
+		int min_cost = 10000000;
+		for(i =0 ; i < data->vertex_set[cluster_to_insert].size ; i++){
+			int vertex_to_insert = data->vertex_set[cluster_to_insert].set[i];
 			
-			//int insert_cost = 
+			int next_edge = vertex_seq[0].next;
+			for(int j = 1; j < data->cluster_count ; j++){
+				int vertex1 = vertex_seq[next_edge].vertex;
+				int vertex2 = vertex_seq[vertex_seq[next_edge].next].vertex;
+	
+				int insert_cost =  data->dist_matrix[vertex1][vertex_to_insert] +
+					data->dist_matrix[vertex_to_insert][vertex2] -
+					data->dist_matrix[vertex1][vertex2];
+				if(insert_cost < min_cost){
+					min_cost = insert_cost;
+					best_pose = next_edge;
+					best_vertex = vertex_to_insert;
+				}
+				next_edge = vertex_seq[next_edge].next;
+			}
 		}
+
+		next_vertex = vertex_seq[best_pose].next;
+		vertex_seq[delete_vertex].prev = best_pose;
+		vertex_seq[delete_vertex].vertex = best_vertex;
+		vertex_seq[delete_vertex].next = next_vertex;
+		vertex_seq[best_pose].next =  delete_vertex;
+		vertex_seq[next_vertex].prev = delete_vertex;
+		
+		rval = optimize_vertex_in_cluster(vertex_seq, data);
+		
 	}
 	
-}*/
+	//TWO OPT MOVE
+	rval = two_opt(vertex_seq, data);
+	
+	tour_cost = list_length(vertex_seq, data);	
+	
+	return tour_cost;
+}
+
+int tour_length(int* tour, struct GTSP* data){
+	int tour_cost = 0;
+		for(int i = 0; i< data->cluster_count ; i++){
+			if(i==data->cluster_count-1){
+				tour_cost += data->dist_matrix[tour[i]][tour[0]];
+			}else{
+				tour_cost += data->dist_matrix[tour[i]][tour[i+1]];
+				}
+			
+		}
+	return tour_cost;	
+}
+
+int list_length(struct TOUR *tour, struct GTSP* data){
+	int tour_cost = 0;
+		for(int i = 0; i< data->cluster_count ; i++){
+				int vertex1 = tour[i].vertex;
+				int vertex2 = tour[tour[i].next].vertex;
+				tour_cost += data->dist_matrix[vertex1][vertex2];
+		}
+	return tour_cost;	
+}
+
+void print_tour(int* tour, struct GTSP* data){
+
+		for(int i = 0; i< data->cluster_count ; i++){
+			printf("%d\t", tour[i]);
+			}
+			printf("\n");
+}
+
+void print_list(struct TOUR * tour, struct GTSP* data){
+		printf("%d\t", tour[0].vertex);
+		int vertex_next = tour[0].next;
+		for(int i = 1; i< data->cluster_count ; i++){
+				printf("%d\t", tour[vertex_next].vertex);
+				vertex_next = tour[vertex_next].next;
+		}
+		printf("\n");	
+}
+
+
