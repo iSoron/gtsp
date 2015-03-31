@@ -2,10 +2,7 @@
 #define _PROJECT_LP_H_
 
 #include <cplex.h>
-
-#define LP_EPSILON 0.000001
-#define MAX_CUT_POOL_SIZE 1000000
-#define MAX_CUT_AGE 10
+#include "params.h"
 
 struct LP
 {
