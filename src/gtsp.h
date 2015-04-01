@@ -52,7 +52,7 @@ int optimize_vertex_in_cluster(struct Tour * tour, struct GTSP *data);
 
 int two_opt(struct Tour * tour, struct GTSP *data);
 
-int K_opt(int* tour, struct GTSP *data);
+int K_opt(struct Tour* tour, struct GTSP *data);
 
 int tour_length(int* tour, struct GTSP* data);
 
@@ -62,5 +62,6 @@ int list_length(struct Tour * tour, struct GTSP* data);
 
 void print_list(struct Tour * tour, struct GTSP* data);
 
+int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x);
 
 #endif //_PROJECT_GTSP_H_
