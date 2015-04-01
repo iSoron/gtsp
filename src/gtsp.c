@@ -245,6 +245,7 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
         }
 
         current_round++;
+        abort_if(get_current_time() - INITIAL_TIME >= MAX_TOTAL_TIME, "time limit exceeded");
 
         int original_cut_pool_size;
         int added_cuts_count;
@@ -510,8 +511,7 @@ int GTSP_solution_found(struct BNC *bnc, struct GTSP *data, double *x)
     log_info("Writting solution to file %s\n", filename);
     rval = GTSP_write_solution(data, filename, x);
     abort_if(rval, "GTSP_write_solution failed");
-	
-	
+
 	rval = build_tour_from_x(data,tour,x);
 	abort_if(rval, "build_tour_from_x failed");
 

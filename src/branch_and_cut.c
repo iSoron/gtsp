@@ -127,6 +127,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
         abort_if(rval, "LP_get_obj_val failed");
 
         if(depth == 1) ROOT_VALUE = objval;
+        abort_if(get_current_time() - INITIAL_TIME >= MAX_TOTAL_TIME, "time limit exceeded");
 
         if (ceil(objval) > *best_val + LP_EPSILON)
         {

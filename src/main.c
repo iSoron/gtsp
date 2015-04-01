@@ -30,6 +30,7 @@ int SUBTOUR_NODE_CLUSTER_COUNT = 0;
 int SUBTOUR_NODE_NODE_COUNT = 0;
 int COMBS_COUNT = 0;
 
+double INITIAL_TIME = 0;
 
 static const struct option options_tab[] = {
         {"help", no_argument, 0, 'h'}, {"tsp", no_argument, 0, 't'},

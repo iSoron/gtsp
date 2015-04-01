@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <time.h>
 #include "util.h"
+#include "main.h"
 
 double get_current_time()
 {
@@ -18,8 +19,6 @@ double get_real_time()
 {
     return (double) time (0);
 }
-
-static double INITIAL_TIME = 0;
 
 void time_printf(const char *fmt, ...)
 {

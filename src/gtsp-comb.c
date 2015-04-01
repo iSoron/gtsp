@@ -89,7 +89,7 @@ int add_comb_cut(
 //    }
 
 #if LOG_LEVEL >= LOG_LEVEL_DEBUG
-    log_debug("Generated cut:\n");
+    log_verbose("Generated cut:\n");
     if (OPTIMAL_X)
     {
         for (int i = 0; i < nz; i++)
@@ -99,17 +99,17 @@ int add_comb_cut(
             if (rmatind[i] >= node_count)
             {
                 struct Edge *e = &graph->edges[rmatind[i] - node_count];
-                log_debug("    %.2lf x%d (%d %d %.4lf)\n", rmatval[i],
+                log_verbose("    %.2lf x%d (%d %d %.4lf)\n", rmatval[i],
                         rmatind[i], e->from->index, e->to->index,
                         OPTIMAL_X[rmatind[i]]);
             }
             else
             {
-                log_debug("    %.2lf x%d (%.4lf)\n", rmatval[i], rmatind[i],
+                log_verbose("    %.2lf x%d (%.4lf)\n", rmatval[i], rmatind[i],
                         OPTIMAL_X[rmatind[i]]);
             }
         }
-        log_debug("    %c %.2lf\n", sense, rhs);
+        log_verbose("    %c %.2lf\n", sense, rhs);
     }
 #endif
 
@@ -118,7 +118,7 @@ int add_comb_cut(
         double sum = 0;
         for (int i = 0; i < nz; i++)
             sum += rmatval[i] * OPTIMAL_X[rmatind[i]];
-        log_debug("%.2lf >= %.2lf\n", sum, rhs);
+        log_verbose("%.2lf >= %.2lf\n", sum, rhs);
         abort_if(sum <= rhs - LP_EPSILON, "cannot add invalid cut");
     }
 
@@ -126,7 +126,7 @@ int add_comb_cut(
     for (int i = 0; i < nz; i++)
         lhs += rmatval[i] * x[rmatind[i]];
 
-    log_debug("Violation: %.4lf >= %.4lf\n", lhs, rhs);
+    log_verbose("Violation: %.4lf >= %.4lf\n", lhs, rhs);
 
     if (lhs + LP_EPSILON > rhs)
     {
@@ -426,11 +426,11 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
                 &tooth_count);
         abort_if(rval, "find_teeth failed");
 
-        log_debug("Component %d has %d teeth:\n", i, tooth_count);
+        log_verbose("Component %d has %d teeth:\n", i, tooth_count);
         for (int j = 0; j < cluster_count; j++)
         {
             if (teeth[j] < 0) continue;
-            log_debug("    %d %d\n", j, teeth[j]);
+            log_verbose("    %d %d\n", j, teeth[j]);
         }
 
         if (tooth_count % 2 == 0)

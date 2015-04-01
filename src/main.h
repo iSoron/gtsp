@@ -22,6 +22,7 @@ extern long CUT_POOL_MAX_MEMORY;
 extern int FLOW_MAX_FLOW_COUNT;
 
 extern double TOTAL_TIME;
+extern double INITIAL_TIME;
 extern double ROOT_VALUE;
 
 extern int SUBTOUR_CLUSTER_CLUSTER_COUNT;
