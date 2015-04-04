@@ -41,7 +41,7 @@ int add_comb_cut(
         if (components[clusters[e->from->index]] != current_component) continue;
         if (components[clusters[e->to->index]] != current_component) continue;
 
-        rmatind[nz] = node_count + e->index;
+        rmatind[nz] = e->index;
         rmatval[nz] = -1.0;
         nz++;
 
@@ -62,31 +62,10 @@ int add_comb_cut(
 
         log_verbose("  tooth (%d %d)\n", e->from->index, e->to->index);
 
-        rmatind[nz] = node_count + e->index;
+        rmatind[nz] = e->index;
         rmatval[nz] = -1.0;
         nz++;
     }
-
-//    // Lifting of the nodes
-//    for (int i = 0; i < node_count; i++)
-//    {
-//        double val;
-//        struct Node *n = &graph->nodes[i];
-//        int c = node_to_cluster[n->index];
-//
-//        if (components[c] == current_component)
-//            val = (teeth[c] < 0 ? 1.0 : 0.0);
-//        else
-//            val = (teeth[c] < 0 ? 0.0 : 0.0);
-//
-//        if (val == 0.0) continue;
-//
-//        rmatind[nz] = n->index;
-//        rmatval[nz] = val;
-//        nz++;
-//
-//        rhs = val;
-//    }
 
 #if LOG_LEVEL >= LOG_LEVEL_DEBUG
     log_verbose("Generated cut:\n");
@@ -357,7 +336,7 @@ static int shrink_clusters(
         int to = clusters[e->to->index];
         int shunk_e_index = edge_map[from * cluster_count + to];
 
-        shrunken_x[shunk_e_index] += x[graph->node_count + e->index];
+        shrunken_x[shunk_e_index] += x[e->index];
     }
 
     CLEANUP:

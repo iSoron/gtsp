@@ -4,6 +4,7 @@
 #include <math.h>
 #include <assert.h>
 #include <sys/stat.h>
+#include <float.h>
 #include "gtsp.h"
 #include "geometry.h"
 #include "util.h"
@@ -180,21 +181,14 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
 {
     int rval = 0;
 
-    int node_count = data->graph->node_count;
     int edge_count = data->graph->edge_count;
     int cluster_count = data->cluster_count;
     int *clusters = data->node_to_cluster;
     struct Edge *edges = data->graph->edges;
 
-    for (int i = 0; i < node_count; i++)
-    {
-        rval = LP_new_row(lp, 'E', 0.0);
-        abort_if(rval, "LP_new_row failed");
-    }
-
     for (int i = 0; i < cluster_count; i++)
     {
-        rval = LP_new_row(lp, 'E', 1.0);
+        rval = LP_new_row(lp, 'E', 2.0);
         abort_if(rval, "LP_new_row failed");
     }
 
@@ -202,22 +196,14 @@ int GTSP_init_lp(struct LP *lp, struct GTSP *data)
     double ub = 1.0;
     int cmatbeg = 0;
 
-    for (int i = 0; i < node_count; i++)
-    {
-        double obj = 0.0;
-        double cmatval[] = {-2.0, 1.0};
-        int cmatind[] = {i, node_count + clusters[i]};
-
-        rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
-                &ub);
-        abort_if(rval, "LP_add_cols failed");
-    }
-
     for (int i = 0; i < edge_count; i++)
     {
+        struct Node *from = edges[i].from;
+        struct Node *to = edges[i].to;
+
         double obj = (double) edges[i].weight;
         double cmatval[] = {1.0, 1.0};
-        int cmatind[] = {edges[i].from->index, edges[i].to->index};
+        int cmatind[] = {clusters[from->index], clusters[to->index]};
 
         rval = LP_add_cols(lp, 1, 2, &obj, &cmatbeg, cmatind, cmatval, &lb,
                 &ub);
@@ -317,7 +303,7 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
 
     int positive_edge_count = 0;
     for (int i = 0; i < edge_count; i++)
-        if (x[i + node_count] > LP_EPSILON)
+        if (x[i] > LP_EPSILON)
             positive_edge_count++;
 
     fprintf(file, "%d %d\n", node_count, edge_count);
@@ -325,9 +311,9 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
     fprintf(file, "%d\n", positive_edge_count);
 
     for (int i = 0; i < edge_count; i++)
-        if (x[i + node_count] > LP_EPSILON)
+        if (x[i] > LP_EPSILON)
             fprintf(file, "%d %d %.4lf\n", edges[i].from->index,
-                    edges[i].to->index, x[i + node_count]);
+                    edges[i].to->index, x[i]);
 
     CLEANUP:
     if (file) fclose(file);
@@ -354,12 +340,10 @@ int GTSP_read_solution(struct GTSP *gtsp, char *filename, double **p_x)
     rval = fscanf(file, "%d %d", &node_count, &edge_count);
     abort_if(rval != 2, "invalid input format (node and edge count)");
 
-    int num_cols = node_count + edge_count;
-
-    x = (double *) malloc(num_cols * sizeof(double));
+    x = (double *) malloc(edge_count * sizeof(double));
     abort_if(!x, "could not allocate x");
 
-    for (int i = 0; i < node_count + edge_count; i++) x[i] = 0.0;
+    for (int i = 0; i < edge_count; i++) x[i] = 0.0;
 
     rval = fscanf(file, "%d", &edge_count);
     abort_if(rval != 1, "invalid input format (positive edge count)");
@@ -378,14 +362,11 @@ int GTSP_read_solution(struct GTSP *gtsp, char *filename, double **p_x)
         abort_if(rval != 3, "invalid input format (edge endpoints)");
 
         edge = edge_map[from * node_count + to];
-        abort_if(edge > num_cols, "invalid edge");
 
-        x[from] += val / 2;
-        x[to] += val / 2;
         x[edge] = val;
     }
 
-    for (int i = 0; i < num_cols; i++)
+    for (int i = 0; i < edge_count; i++)
     {
         if (x[i] <= LP_EPSILON) continue;
         log_debug("    x%-5d = %.6f\n", i, x[i]);
@@ -404,7 +385,7 @@ int build_edge_map(struct GTSP *gtsp, int *edge_map)
 {
     int node_count = gtsp->graph->node_count;
 
-    int k = node_count;
+    int k = 0;
     for (int i = 0; i < node_count; i++)
     {
         for (int j = i + 1; j < node_count; j++)
@@ -437,7 +418,7 @@ int GTSP_check_solution(struct GTSP *data, double *x)
     stack = (struct Node **) malloc(graph->node_count * sizeof(struct Node *));
     abort_if(!stack, "could not allocate stack");
 
-    for (int i = 0; i < node_count + edge_count; i++)
+    for (int i = 0; i < edge_count; i++)
     {
         abort_iff(x[i] < 1.0 - LP_EPSILON && x[i] > LP_EPSILON,
                 "solution is not integral: x%d = %.4lf", i, x[i]);
@@ -453,13 +434,13 @@ int GTSP_check_solution(struct GTSP *data, double *x)
         cluster_mark[i] = 0;
 
     int initial;
-    for (initial = 0; initial < node_count; initial++)
+    for (initial = 0; initial < edge_count; initial++)
         if (x[initial] > 1.0 - LP_EPSILON) break;
 
-    abort_if(initial == node_count, "no initial node");
+    abort_if(initial == edge_count, "no initial node");
 
-    stack[stack_top++] = &graph->nodes[initial];
-    graph->nodes[initial].mark = 1;
+    stack[stack_top++] = graph->edges[initial].from;
+    graph->edges[initial].from->mark = 1;
 
     while (stack_top > 0)
     {
@@ -472,7 +453,7 @@ int GTSP_check_solution(struct GTSP *data, double *x)
             struct Node *neighbor = adj->neighbor;
 
             if (neighbor->mark) continue;
-            if (x[node_count + adj->edge->index] < LP_EPSILON) continue;
+            if (x[adj->edge->index] < LP_EPSILON) continue;
 
             stack[stack_top++] = neighbor;
             neighbor->mark = 1;
@@ -504,7 +485,7 @@ int GTSP_solution_found(struct BNC *bnc, struct GTSP *data, double *x)
 	
 	struct Tour* tour;
 	tour = (struct Tour*) malloc(data->cluster_count*sizeof(struct Tour));
-	 
+
     sprintf(filename, "tmp/gtsp-m%d-n%d-s%d.out", data->cluster_count,
             data->graph->node_count, SEED);
 
@@ -517,7 +498,7 @@ int GTSP_solution_found(struct BNC *bnc, struct GTSP *data, double *x)
 
 	rval = large_neighborhood_search(tour, data, &tour_cost);
 	abort_if(rval, "large_neighborhood_search failed");
-		
+
 	if(tour_cost  + LP_EPSILON < *best_val){
 		log_info("Local search improve the integral solution\n");
 		log_info("         obj val = %f\n",*best_val );
@@ -684,8 +665,8 @@ int GTSP_main(int argc, char **argv)
     rval = GTSP_write_problem(&data, "gtsp.in");
     #endif
 
-    int init_val;
-
+    int init_val = 0;
+//
     initial_x = (double *) malloc(
             (data.graph->node_count + data.graph->edge_count) * sizeof(double));
     abort_if(!initial_x, "could not allocate initial_x");
@@ -729,7 +710,7 @@ int GTSP_main(int argc, char **argv)
         for (int i = 0; i < data.graph->edge_count; i++)
         {
             struct Edge *e = &data.graph->edges[i];
-            opt_val += OPTIMAL_X[i + input_node_count] * e->weight;
+            opt_val += OPTIMAL_X[i] * e->weight;
         }
 
         log_info("    opt = %.2lf\n", opt_val);
@@ -839,7 +820,7 @@ int build_x_from_tour(struct GTSP *data, struct Tour *tour, double *x)
     rval = build_edge_map(data, edge_map);
     abort_if(rval, "build_edge_map failed");
 
-    for (int i = 0; i < node_count + edge_count; i++)
+    for (int i = 0; i < edge_count; i++)
         x[i] = 0.0;
 
 	int next_vertex = tour[0].next;
@@ -851,8 +832,6 @@ int build_x_from_tour(struct GTSP *data, struct Tour *tour, double *x)
         current_vertex = tour[next_vertex].vertex;
         next_vertex = tour[next_vertex].next;
 
-        x[from] = 1.0;
-        x[to] = 1.0;
         x[edge_map[from * node_count + to]] = 1.0;
     }
 
@@ -1248,6 +1227,7 @@ int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x)
 
     struct Graph *graph = data->graph;
     const int node_count = graph->node_count;
+    const int edge_count = graph->edge_count;
   
     cluster_mark = (int *) malloc(data->cluster_count * sizeof(int));
     abort_if(!cluster_mark, "could not allocate cluster_mark");
@@ -1262,10 +1242,12 @@ int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x)
         cluster_mark[i] = 0;
 	
     int initial;
-    for (initial = 0; initial < node_count; initial++)
+    for (initial = 0; initial < edge_count; initial++)
         if (x[initial] > 1.0 - LP_EPSILON) break;
 
-    abort_if(initial == node_count, "no initial node");
+    initial = graph->edges[initial].from->index;
+
+    abort_if(initial == edge_count, "no initial node");
 
     stack[stack_top++] = &graph->nodes[initial];
     graph->nodes[initial].mark = 1;
@@ -1284,7 +1266,7 @@ int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x)
             struct Node *neighbor = adj->neighbor;
 
             if (neighbor->mark) continue;
-            if (x[node_count + adj->edge->index] < LP_EPSILON) continue;
+            if (x[adj->edge->index] < LP_EPSILON) continue;
 
             stack[stack_top++] = neighbor;
             tour[next_vertex].vertex = neighbor->index;
