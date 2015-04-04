@@ -30,6 +30,12 @@ double INITIAL_TIME = 0;
 
 int BNC_NODE_COUNT = 0;
 
+char LP_FILENAME[100] = {0};
+char SOLUTION_FILENAME[100] = {0};
+char FRAC_SOLUTION_FILENAME[100] = {0};
+char WRITE_GRAPH_FILENAME[100] = {0};
+char STATS_FILENAME[100] = {0};
+
 static int input_node_count = -1;
 static int input_cluster_count = -1;
 static int grid_size = 100;
@@ -39,24 +45,36 @@ static const struct option options_tab[] = {{"help", no_argument, 0, 'h'},
         {"clusters", required_argument, 0, 'm'},
         {"grid-size", required_argument, 0, 'g'},
         {"optimal", required_argument, 0, 'x'},
-        {"seed", required_argument, 0, 's'},
+        {"seed", required_argument, 0, 's'}, {"out", required_argument, 0, 'o'},
+        {"stats", required_argument, 0, 't'}, {"lp", required_argument, 0, 'l'},
+        {"write-graph", required_argument, 0, 'w'},
         {(char *) 0, (int) 0, (int *) 0, (int) 0}};
 
 static char input_x_filename[1000] = {0};
 
-static void print_usage(int argc, char **argv)
+static void print_usage(char **argv)
 {
     printf("Usage: %s [OPTION]...\n", argv[0]);
     printf("Solves the Generalized Traveling Salesman problem for the input graph.\n\n");
 
     printf("Parameters:\n");
-    printf("%4s %-13s %s\n", "-n", "--nodes", "number of nodes");
-    printf("%4s %-13s %s\n", "-m", "--clusters", "number of clusters");
-    printf("%4s %-13s %s\n", "-s", "--seed", "random seed");
-    printf("%4s %-13s %s\n", "-g", "--grid-size",
+    printf("%4s %-20s %s\n", "-n", "--nodes=NUM", "number of nodes");
+    printf("%4s %-20s %s\n", "-m", "--clusters=NUM", "number of clusters");
+    printf("%4s %-20s %s\n", "-s", "--seed=NUM", "random seed");
+    printf("%4s %-20s %s\n", "-g", "--grid-size=NUM",
             "size of the box used for generating random points");
-    printf("%4s %-13s %s\n", "-x", "--optimal",
-            "file containg valid solution (used to assert validity of cuts)");
+    printf("%4s %-20s %s\n", "-x", "--optimal=FILE",
+            "file containg optimal solution (used to assert validity of cuts)");
+    printf("%4s %-20s %s\n", "-o", "--out=FILE",
+            "write optimal solution to this file");
+    printf("%4s %-20s %s\n", "-f", "--frac=FILE",
+            "write current fractional solution to this file");
+    printf("%4s %-20s %s\n", "-l", "--lp=FILE",
+            "write initial LP to this file");
+    printf("%4s %-20s %s\n", "-w", "--write-graph=FILE",
+            "write the randomly generated input graph to this file");
+    printf("%4s %-20s %s\n", "-t", "--stats=FILE",
+            "write statistics to this file (append if file exists)");
 }
 
 static int parse_args(int argc, char **argv)
@@ -69,7 +87,8 @@ static int parse_args(int argc, char **argv)
     {
         int c = 0;
         int option_index = 0;
-        c = getopt_long(argc, argv, "n:m:g:x:s:h:", options_tab, &option_index);
+        c = getopt_long(argc, argv, "n:m:g:x:s:h:o:t:l:w:", options_tab,
+                &option_index);
 
         if (c < 0) break;
 
@@ -91,12 +110,28 @@ static int parse_args(int argc, char **argv)
                 strcpy(input_x_filename, optarg);
                 break;
 
+            case 'o':
+                strcpy(SOLUTION_FILENAME, optarg);
+                break;
+
             case 's':
                 SEED = (unsigned) atoi(optarg);
                 break;
 
+            case 't':
+                strcpy(STATS_FILENAME, optarg);
+                break;
+
+            case 'l':
+                strcpy(LP_FILENAME, optarg);
+                break;
+
+            case 'w':
+                strcpy(WRITE_GRAPH_FILENAME, optarg);
+                break;
+
             case 'h':
-                print_usage(argc, argv);
+                print_usage(argv);
                 exit(0);
 
             case ':':
@@ -175,16 +210,12 @@ int main(int argc, char **argv)
             grid_size, &data);
     abort_if(rval, "GTSP_create_random_problem failed");
 
-    char filename[100];
-    sprintf(filename, "input/%s.in", instance_name);
-    log_info("Writing random instance to file %s\n", filename);
-    rval = GTSP_write_problem(&data, filename);
-    abort_if(rval, "GTSP_write_problem failed");
-
-#if LOG_LEVEL >= LOG_LEVEL_DEBUG
-    log_info("Writing random instance to file gtsp.in\n");
-    rval = GTSP_write_problem(&data, "gtsp.in");
-#endif
+    if (strlen(WRITE_GRAPH_FILENAME) > 0)
+    {
+        log_info("Writing random instance to file %s\n", WRITE_GRAPH_FILENAME);
+        rval = GTSP_write_problem(&data, WRITE_GRAPH_FILENAME);
+        abort_if(rval, "GTSP_write_problem failed");
+    }
 
     int init_val = 0;
 
@@ -212,7 +243,6 @@ int main(int argc, char **argv)
     if (strlen(input_x_filename) == 0)
     {
         sprintf(input_x_filename, "optimal/%s.out", instance_name);
-
         FILE *file = fopen(input_x_filename, "r");
 
         if (!file)
@@ -241,18 +271,11 @@ int main(int argc, char **argv)
     rval = BNC_init_lp(&bnc);
     abort_if(rval, "BNC_init_lp failed");
 
-//    log_info("Writing LP to file gtsp.lp...\n");
-//    rval = LP_write(bnc.lp, "gtsp.lp");
-//    abort_if(rval, "LP_write failed");
-
     log_info("Starting branch-and-cut solver...\n");
     rval = BNC_solve(&bnc);
     abort_if(rval, "BNC_solve_node failed");
 
     abort_if(!bnc.best_x, "problem has no feasible solution");
-
-    log_info("Optimal integral solution:\n");
-    log_info("    obj value = %.2lf **\n", bnc.best_obj_val);
 
     if (OPTIMAL_X)
     {
@@ -263,60 +286,69 @@ int main(int argc, char **argv)
 
     TOTAL_TIME = get_user_time() - initial_time;
 
-    log_info("Branch-and-bound nodes: %d\n", BNC_NODE_COUNT);
-    log_info("LP optimize calls: %d\n", LP_SOLVE_COUNT);
-    log_info("LP solving time: %.2lf\n", LP_SOLVE_TIME);
-    log_info("LP cut pool management time: %.2lf\n", CUT_POOL_TIME);
-
-    // Write statistics to a file
-    FILE *file = fopen("stats.tab", "a");
-    abort_if(!file, "could not open stats.tab");
-
-    struct stat st;
-    stat("stats.tab", &st);
-
-    if (st.st_size == 0)
+    if (strlen(STATS_FILENAME) > 0)
     {
-        fprintf(file, "%-20s  ", "instance");
-        fprintf(file, "%-8s  ", "time");
-        fprintf(file, "%-8s  ", "subt-t");
-        fprintf(file, "%-8s  ", "combs-t");
-        fprintf(file, "%-8s  ", "pool-t");
-        fprintf(file, "%-8s  ", "pool-m");
-        fprintf(file, "%-8s  ", "lp-count");
-        fprintf(file, "%-8s  ", "lp-time");
-        fprintf(file, "%-8s  ", "lp-rows");
-        fprintf(file, "%-8s  ", "lp-cols");
-        fprintf(file, "%-8s  ", "init-v");
-        fprintf(file, "%-8s  ", "opt-v");
-        fprintf(file, "%-8s  ", "root-v");
-        fprintf(file, "%-8s  ", "nodes");
-        fprintf(file, "%-8s  ", "subt-cc");
-        fprintf(file, "%-8s  ", "subt-nc");
-        fprintf(file, "%-8s  ", "subt-nn");
-        fprintf(file, "%-8s  ", "combs");
+        log_info("Writing statistics to file %s...\n", STATS_FILENAME);
+        FILE *file = fopen(STATS_FILENAME, "a");
+        abort_if(!file, "could not open stats.tab");
 
+        struct stat st;
+        stat(STATS_FILENAME, &st);
+
+        if (st.st_size == 0)
+        {
+            fprintf(file, "%-20s  ", "instance");
+            fprintf(file, "%-8s  ", "time");
+            fprintf(file, "%-8s  ", "subt-t");
+            fprintf(file, "%-8s  ", "combs-t");
+            fprintf(file, "%-8s  ", "pool-t");
+            fprintf(file, "%-8s  ", "pool-m");
+            fprintf(file, "%-8s  ", "lp-count");
+            fprintf(file, "%-8s  ", "lp-time");
+            fprintf(file, "%-8s  ", "lp-rows");
+            fprintf(file, "%-8s  ", "lp-cols");
+            fprintf(file, "%-8s  ", "init-v");
+            fprintf(file, "%-8s  ", "opt-v");
+            fprintf(file, "%-8s  ", "root-v");
+            fprintf(file, "%-8s  ", "nodes");
+            fprintf(file, "%-8s  ", "subt-cc");
+            fprintf(file, "%-8s  ", "subt-nc");
+            fprintf(file, "%-8s  ", "subt-nn");
+            fprintf(file, "%-8s  ", "combs");
+
+            fprintf(file, "\n");
+        }
+
+        fprintf(file, "%-20s  ", instance_name);
+        fprintf(file, "%-8.2lf  ", TOTAL_TIME);
+        fprintf(file, "%-8.2lf  ", SUBTOUR_TIME);
+        fprintf(file, "%-8.2lf  ", COMBS_TIME);
+        fprintf(file, "%-8.2lf  ", CUT_POOL_TIME);
+        fprintf(file, "%-8ld  ", CUT_POOL_MAX_MEMORY / 1024 / 1024);
+        fprintf(file, "%-8d  ", LP_SOLVE_COUNT);
+        fprintf(file, "%-8.2lf  ", LP_SOLVE_TIME);
+        fprintf(file, "%-8d  ", LP_MAX_ROWS);
+        fprintf(file, "%-8d  ", LP_MAX_COLS);
+        fprintf(file, "%-8d  ", init_val);
+        fprintf(file, "%-8.0lf  ", bnc.best_obj_val);
+        fprintf(file, "%-8.0lf  ", ROOT_VALUE);
+        fprintf(file, "%-8d  ", BNC_NODE_COUNT);
+        fprintf(file, "%-8d  ", SUBTOUR_COUNT);
+        fprintf(file, "%-8d  ", COMBS_COUNT);
         fprintf(file, "\n");
+        fclose(file);
     }
 
-    fprintf(file, "%-20s  ", instance_name);
-    fprintf(file, "%-8.2lf  ", TOTAL_TIME);
-    fprintf(file, "%-8.2lf  ", SUBTOUR_TIME);
-    fprintf(file, "%-8.2lf  ", COMBS_TIME);
-    fprintf(file, "%-8.2lf  ", CUT_POOL_TIME);
-    fprintf(file, "%-8ld  ", CUT_POOL_MAX_MEMORY / 1024 / 1024);
-    fprintf(file, "%-8d  ", LP_SOLVE_COUNT);
-    fprintf(file, "%-8.2lf  ", LP_SOLVE_TIME);
-    fprintf(file, "%-8d  ", LP_MAX_ROWS);
-    fprintf(file, "%-8d  ", LP_MAX_COLS);
-    fprintf(file, "%-8d  ", init_val);
-    fprintf(file, "%-8.0lf  ", bnc.best_obj_val);
-    fprintf(file, "%-8.0lf  ", ROOT_VALUE);
-    fprintf(file, "%-8d  ", BNC_NODE_COUNT);
-    fprintf(file, "%-8d  ", SUBTOUR_COUNT);
-    fprintf(file, "%-8d  ", COMBS_COUNT);
-    fprintf(file, "\n");
-    fclose(file);
+    if(strlen(SOLUTION_FILENAME) == 0)
+    {
+        log_info("Optimal solution:\n");
+        rval = GTSP_print_solution(&data, bnc.best_x);
+        abort_if(rval, "GTSP_print_solution failed");
+    }
+
+    log_info("Optimal solution value:\n");
+    log_info("    %.4lf\n", bnc.best_obj_val);
+
 
     CLEANUP:
     if (OPTIMAL_X) free(OPTIMAL_X);

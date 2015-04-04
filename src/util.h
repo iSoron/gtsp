@@ -41,11 +41,11 @@
 #endif
 
 #define abort_if(cond, msg) if(cond) { \
-    fprintf(stderr, "%28s:%d " msg "\n", __FILE__, __LINE__); \
+    fprintf(stderr, msg " (%s:%d)\n", __FILE__, __LINE__); \
     rval = 1; goto CLEANUP; }
 
 #define abort_iff(cond, msg, ...) if(cond) { \
-    fprintf(stderr, "%28s:%d " msg "\n", __FILE__, __LINE__, __VA_ARGS__); \
+    fprintf(stderr, msg " (%s:%d)\n", __VA_ARGS__, __FILE__, __LINE__); \
     rval = 1; goto CLEANUP; }
 
 #define UNUSED(x) (void)(x)

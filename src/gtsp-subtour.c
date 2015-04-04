@@ -187,8 +187,11 @@ int GTSP_find_exact_subtour_cuts(struct LP *lp, struct GTSP *data)
     abort_if(rval, "LP_get_x failed");
 
 #if LOG_LEVEL >= LOG_LEVEL_DEBUG
-    rval = GTSP_write_solution(data, "gtsp-frac.out", x);
-    abort_if(rval, "GTSP_write_solution failed");
+    if(strlen(FRAC_SOLUTION_FILENAME) > 0)
+    {
+        rval = GTSP_write_solution(data, FRAC_SOLUTION_FILENAME, x);
+        abort_if(rval, "GTSP_write_solution failed");
+    }
 #endif
 
     struct Graph digraph;

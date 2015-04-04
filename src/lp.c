@@ -384,11 +384,16 @@ int LP_get_num_cols(struct LP *lp)
 int LP_write(struct LP *lp, const char *fname)
 {
     int rval = 0;
-
     char nambuf[MAX_NAME_LENGTH];
+
+    FILE *f = fopen(fname, "w");
+    abort_iff(!f, "could not open file %s", fname);
+    fclose(f);
+
     strncpy(nambuf, fname, MAX_NAME_LENGTH);
     nambuf[MAX_NAME_LENGTH - 1] = '\0';
 
+    log_info("Writing LP to file %s...\n", fname);
     rval = CPXwriteprob(lp->cplex_env, lp->cplex_lp, nambuf, "RLP");
     abort_if(rval, "CPXwriteprob failed");
 

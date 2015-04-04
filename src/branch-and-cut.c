@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "lp.h"
-#include "branch_and_cut.h"
+#include "branch-and-cut.h"
 #include "util.h"
 #include "gtsp.h"
 
@@ -58,8 +58,11 @@ int BNC_init_lp(struct BNC *bnc)
     rval = bnc->problem_init_lp(bnc->lp, bnc->problem_data);
     abort_if(rval, "problem_init_lp failed");
 
-    rval = LP_write(bnc->lp, "subtour.lp");
-    abort_if(rval, "LP_write failed");
+    if(strlen(LP_FILENAME) > 0)
+    {
+        rval = LP_write(bnc->lp, LP_FILENAME);
+        abort_if(rval, "LP_write failed");
+    }
 
     CLEANUP:
     return rval;

@@ -3,7 +3,7 @@
 
 #include "lp.h"
 #include "graph.h"
-#include "branch_and_cut.h"
+#include "branch-and-cut.h"
 
 struct Tour
 {
@@ -59,6 +59,10 @@ void print_tour(int* tour, struct GTSP* data);
 int list_length(struct Tour * tour, struct GTSP* data);
 
 void print_list(struct Tour * tour, struct GTSP* data);
+
+int GTSP_print_solution(struct GTSP *data, double *x);
+
+
 
 int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x);
 

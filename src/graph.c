@@ -78,8 +78,6 @@ int graph_build(
         int b = edges[2 * i + 1];
 
         n = &graph->nodes[a];
-        n->adj[n->degree].neighbor_index = b;
-        n->adj[n->degree].edge_index = i;
         n->adj[n->degree].neighbor = &graph->nodes[b];
         n->adj[n->degree].edge = &graph->edges[i];
         n->degree++;
@@ -87,8 +85,6 @@ int graph_build(
         if (!is_directed)
         {
             n = &graph->nodes[b];
-            n->adj[n->degree].neighbor_index = a;
-            n->adj[n->degree].edge_index = i;
             n->adj[n->degree].neighbor = &graph->nodes[a];
             n->adj[n->degree].edge = &graph->edges[i];
             n->degree++;

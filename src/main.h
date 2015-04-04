@@ -24,4 +24,8 @@ extern double ROOT_VALUE;
 extern int SUBTOUR_COUNT;
 extern int COMBS_COUNT;
 
+extern char LP_FILENAME[100];
+extern char SOLUTION_FILENAME[100];
+extern char FRAC_SOLUTION_FILENAME[100];
+
 #endif

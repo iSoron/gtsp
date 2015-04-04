@@ -5,9 +5,6 @@
 
 struct Adjacency
 {
-    int edge_index;
-    int neighbor_index;
-
     struct Edge *edge;
     struct Node *neighbor;
 };

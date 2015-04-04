@@ -8,9 +8,7 @@
 #include "gtsp-comb.h"
 
 int large_neighborhood_search(
-        struct Tour *tour,
-        struct GTSP *data,
-        int *tour_cost);
+        struct Tour *tour, struct GTSP *data, int *tour_cost);
 
 int build_edge_map(struct GTSP *gtsp, int *edge_map);
 
@@ -274,7 +272,8 @@ int GTSP_write_problem(struct GTSP *data, char *filename)
 
     const struct Graph *graph = data->graph;
 
-    fprintf(file, "%d %d\n", graph->node_count, data->cluster_count);
+    fprintf(file, "%d %d %d\n", graph->node_count, data->cluster_count,
+            graph->edge_count);
 
     for (int i = 0; i < graph->node_count; i++)
     {
@@ -287,15 +286,28 @@ int GTSP_write_problem(struct GTSP *data, char *filename)
     return rval;
 }
 
+int GTSP_print_solution(struct GTSP *data, double *x)
+{
+    struct Edge *edges = data->graph->edges;
+    int edge_count = data->graph->edge_count;
+
+    for (int i = 0; i < edge_count; i++)
+        if (x[i] > EPSILON)
+            log_info("    %-3d %-3d %8.4lf\n", edges[i].from->index,
+                    edges[i].to->index, x[i]);
+
+    return 0;
+}
+
 int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
 {
     int rval = 0;
 
     struct Edge *edges = data->graph->edges;
-    int node_count = data->graph->node_count;
     int edge_count = data->graph->edge_count;
 
     FILE *file;
+
     file = fopen(filename, "w");
     abort_if(!file, "could not open file");
 
@@ -303,8 +315,6 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
     for (int i = 0; i < edge_count; i++)
         if (x[i] > EPSILON)
             positive_edge_count++;
-
-    fprintf(file, "%d %d\n", node_count, edge_count);
 
     fprintf(file, "%d\n", positive_edge_count);
 
@@ -478,18 +488,17 @@ int GTSP_solution_found(struct BNC *bnc, struct GTSP *data, double *x)
 
     int rval = 0;
     int tour_cost;
-    char filename[100];
     double *best_val = &bnc->best_obj_val;
 
     struct Tour *tour;
     tour = (struct Tour *) malloc(data->cluster_count * sizeof(struct Tour));
 
-    sprintf(filename, "tmp/gtsp-m%d-n%d-s%d.out", data->cluster_count,
-            data->graph->node_count, SEED);
-
-    log_info("Writting solution to file %s\n", filename);
-    rval = GTSP_write_solution(data, filename, x);
-    abort_if(rval, "GTSP_write_solution failed");
+    if (strlen(SOLUTION_FILENAME) > 0)
+    {
+        log_info("Writing solution to file %s\n", SOLUTION_FILENAME);
+        rval = GTSP_write_solution(data, SOLUTION_FILENAME, x);
+        abort_if(rval, "GTSP_write_solution failed");
+    }
 
     rval = build_tour_from_x(data, tour, x);
     abort_if(rval, "build_tour_from_x failed");
@@ -747,9 +756,7 @@ int two_opt(struct Tour *tour, struct GTSP *data)
 }
 
 int large_neighborhood_search(
-        struct Tour *tour,
-        struct GTSP *data,
-        int *tour_cost)
+        struct Tour *tour, struct GTSP *data, int *tour_cost)
 {
     int rval = 0;
 

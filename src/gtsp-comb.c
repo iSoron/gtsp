@@ -67,7 +67,7 @@ static int add_comb_cut(
         nz++;
     }
 
-#if LOG_LEVEL >= LOG_LEVEL_DEBUG
+#if LOG_LEVEL >= LOG_LEVEL_VERBOSE
     log_verbose("Generated cut:\n");
     if (OPTIMAL_X)
     {
@@ -341,49 +341,6 @@ static int shrink_clusters(
     return rval;
 }
 
-static int write_shrunken_graph(
-        double *shrunken_x,
-        struct Graph *shrunken_graph,
-        int const cluster_count)
-{
-    int rval = 0;
-
-    FILE *file = 0;
-
-    file = fopen("gtsp-shrunken.in", "w");
-    abort_if(!file, "could not open file");
-
-    fprintf(file, "%d %d\n", (*shrunken_graph).node_count, cluster_count);
-    for (int i = 0; i < (*shrunken_graph).node_count; i++)
-        fprintf(file, "%.2lf %.2lf %d\n", (*shrunken_graph).x_coordinates[i],
-                (*shrunken_graph).y_coordinates[i], i);
-
-    fclose(file);
-
-    file = fopen("gtsp-shrunken.out", "w");
-    abort_if(!file, "could not open file");
-
-    int positive_edge_count = 0;
-    for (int i = 0; i < (*shrunken_graph).edge_count; i++)
-        if (shrunken_x[i] > EPSILON)
-            positive_edge_count++;
-
-    fprintf(file, "%d %d\n", (*shrunken_graph).node_count,
-            (*shrunken_graph).edge_count);
-
-    fprintf(file, "%d\n", positive_edge_count);
-
-    for (int i = 0; i < (*shrunken_graph).edge_count; i++)
-        if (shrunken_x[i] > EPSILON)
-            fprintf(file, "%d %d %.4lf\n",
-                    (*shrunken_graph).edges[i].from->index,
-                    (*shrunken_graph).edges[i].to->index, shrunken_x[i]);
-    fclose(file);
-
-    CLEANUP:
-    return rval;
-}
-
 int GTSP_find_comb_cuts(struct LP *lp, struct GTSP *data)
 {
     int rval = 0;
@@ -414,13 +371,6 @@ int GTSP_find_comb_cuts(struct LP *lp, struct GTSP *data)
 
     rval = shrink_clusters(data, x, &shrunken_graph, shrunken_x);
     abort_if(rval, "shrink_clusters failed");
-
-#if LOG_LEVEL >= LOG_LEVEL_DEBUG
-    rval = write_shrunken_graph(shrunken_x, &shrunken_graph, cluster_count);
-    abort_if(rval, "write_shrunken_graph failed");
-#else
-    UNUSED(write_shrunken_graph);
-#endif
 
     teeth = (int *) malloc(cluster_count * sizeof(int));
     components = (int *) malloc(cluster_count * sizeof(int));
