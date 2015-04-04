@@ -327,9 +327,7 @@ int main(int argc, char **argv)
             fprintf(file, "%-8s  ", "opt-v");
             fprintf(file, "%-8s  ", "root-v");
             fprintf(file, "%-8s  ", "nodes");
-            fprintf(file, "%-8s  ", "subt-cc");
-            fprintf(file, "%-8s  ", "subt-nc");
-            fprintf(file, "%-8s  ", "subt-nn");
+            fprintf(file, "%-8s  ", "subtour");
             fprintf(file, "%-8s  ", "combs");
 
             fprintf(file, "\n");
