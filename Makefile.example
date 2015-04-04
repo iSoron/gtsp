@@ -1,13 +1,13 @@
 path   := src/*/*.c src/*.c src/*.s
 include:= src/*.h
-binary := bin/hw2.exe
+binary := bin/gtsp.run
 
 source := $(wildcard ${path})
 headers:= $(wildcard ${include})
 obj    := $(patsubst src/%, bin/%, $(patsubst %.c,%.o, $(patsubst %.s,%.s.o, $(source))))
 
-CPLEX_INCLUDE = /.../.../.../IBM/ILOG/CPLEX_Studio1261/cplex/include/ilcplex
-CPLEX_LIB_PATH = /.../.../.../IBM/ILOG/CPLEX_Studio1261/cplex/bin/x64_win64
+CPLEX_INCLUDE = .../IBM/ILOG/CPLEX_Studio1261/cplex/include/ilcplex
+CPLEX_LIB_PATH = .../IBM/ILOG/CPLEX_Studio1261/cplex/bin/x64_win64
 CPLEX_LIB = cplex1261
 
 flags  := -O3 -g -Wall -pedantic -g --std=c11 -Winline -I$(CPLEX_INCLUDE)
