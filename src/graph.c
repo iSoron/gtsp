@@ -1,7 +1,6 @@
 #include <malloc.h>
 #include "graph.h"
 #include "util.h"
-#include "lp.h"
 
 void graph_init(struct Graph *graph)
 {
@@ -109,50 +108,6 @@ int graph_build(
     return rval;
 }
 
-void graph_dfs(
-        int n, struct Graph *G, double *x, int *island_size, int *island_nodes)
-{
-    *(island_nodes + (*island_size)) = n;
-    (*island_size)++;
-
-    struct Node *pn = &G->nodes[n];
-    pn->mark = 1;
-
-    for (int i = 0; i < pn->degree; i++)
-    {
-        if (x[pn->adj[i].edge_index] > LP_EPSILON)
-        {
-            int neighbor = pn->adj[i].neighbor_index;
-
-            if (G->nodes[neighbor].mark == 0)
-                graph_dfs(neighbor, G, x, island_size, island_nodes);
-        }
-    }
-}
-
-void get_delta(
-        int island_node_count,
-        int *island_nodes,
-        int edge_count,
-        int *edges,
-        int *delta_count,
-        int *delta,
-        int *marks)
-{
-    for (int i = 0; i < island_node_count; i++)
-        marks[island_nodes[i]] = 1;
-
-    int k = 0;
-    for (int i = 0; i < edge_count; i++)
-        if (marks[edges[2 * i]] + marks[edges[2 * i + 1]] == 1)
-            delta[k++] = i;
-
-    *delta_count = k;
-
-    for (int i = 0; i < island_node_count; i++)
-        marks[island_nodes[i]] = 0;
-}
-
 int get_cut_edges_from_marks(
         struct Graph *graph, int *cut_edges_count, struct Edge **cut_edges)
 {
@@ -173,7 +128,7 @@ int get_cut_edges_from_marks(
 int graph_dump(const struct Graph *graph)
 {
     (void) graph;
-    #if LOG_LEVEL >= LOG_LEVEL_DEBUG
+#if LOG_LEVEL >= LOG_LEVEL_DEBUG
     log_debug("node_count: %d edge_count: %d\n", graph->node_count,
             graph->edge_count);
 

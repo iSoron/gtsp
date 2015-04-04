@@ -6,9 +6,6 @@
 #include "util.h"
 #include "gtsp.h"
 
-
-int BNC_NODE_COUNT = 0;
-
 static int BNC_solve_node(struct BNC *bnc, int depth);
 
 static int BNC_branch_node(struct BNC *bnc, double *x, int depth);
@@ -16,8 +13,6 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth);
 static int BNC_is_integral(double *x, int num_cols);
 
 static int BNC_find_best_branching_var(double *x, int num_cols);
-
-//int optimize_vertex_in_cluster(struct BNC *bnc, double best_val);
 
 int BNC_init(struct BNC *bnc)
 {
@@ -101,7 +96,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
 
     if(depth == 1) ROOT_VALUE = objval;
 
-    if (ceil(objval) > *best_val + LP_EPSILON)
+    if (ceil(objval) > *best_val + EPSILON)
     {
         log_debug("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
                   *best_val);
@@ -127,9 +122,9 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
         abort_if(rval, "LP_get_obj_val failed");
 
         if(depth == 1) ROOT_VALUE = objval;
-        abort_if(get_current_time() - INITIAL_TIME >= MAX_TOTAL_TIME, "time limit exceeded");
+        abort_if(get_user_time() - INITIAL_TIME >= MAX_TOTAL_TIME, "time limit exceeded");
 
-        if (ceil(objval) > *best_val + LP_EPSILON)
+        if (ceil(objval) > *best_val + EPSILON)
         {
             log_debug("Branch pruned by bound (%.2lf > %.2lf).\n", objval,
                       *best_val);
@@ -145,7 +140,7 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     {
         log_debug("Solution is integral\n");
 
-        if (objval + LP_EPSILON < *best_val)
+        if (objval + EPSILON < *best_val)
         {
             if (bnc->best_x) free(bnc->best_x);
             *best_val = objval;
@@ -214,17 +209,11 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
 
 static int BNC_is_integral(double *x, int num_cols)
 {
-#ifdef ALLOW_FRACTIONAL_SOLUTIONS
-    UNUSED(num_cols);
-    UNUSED(x);
-    return 1;
-#else
     for (int i = 0; i < num_cols; i++)
-        if (x[i] > LP_EPSILON && x[i] < 1.0 - LP_EPSILON)
+        if (x[i] > EPSILON && x[i] < 1.0 - EPSILON)
             return 0;
 
     return 1;
-#endif
 }
 
 static int BNC_find_best_branching_var(double *x, int num_cols)
@@ -244,129 +233,3 @@ static int BNC_find_best_branching_var(double *x, int num_cols)
     return best_index;
 }
 
-
-/*
-int re_optimize_integral(struct BNC *bnc){
-	int i = 0 , current_vertex = 0, rval = 0;
-	struct GTSP* data;
-	data = bnc->problem_data;
-	int node_count = data->graph->node_count;
-	int cluster_count = data->cluster_count;
-	int edge_count = data->graph->edge_count;
-	struct Tour * tour = (struct Tour*) NULL;
-	
-	//intialize the tour
-	tour = (struct Tour *) malloc( cluster_count * sizeof(struct Tour));
-	for (i = 0; i < edge_count; i++){
-		tour[i].vertex = -1;
-		tour[i].next = -1;
-		tour[i].prev = -1;
-	}
-	
-	//Constructing the tour with vertices
-	for (i = 0; i < edge_count; i++){
-        if (bnc->best_x[i + node_count] > LP_EPSILON) {
-			tour[current_vertex].vertex = data->graph->edges[i].from->index;
-			current_vertex += 1;
-			printf("From node %d \t", data->graph->edges[i].from->index);	
-			printf("TO node %d \n", data->graph->edges[i].to->index);	
-		}
-	}
-	//printf("Edgese in solution %d \n", current_vertex);	
-	
-
-	return rval; 
-	CLEANUP:
-    if (data) free(data);
-	
-}
-*/
-/*
-int optimize_vertex_in_cluster(struct BNC *bnc, double best_val)
-{
-	
-	int i = 0 , j, current_vertex = 0, rval = 0;
-	int tour_cost = 0;
-	struct GTSP* data;
-	data = bnc->problem_data;
-	//rval = GTSP_init_data(&data);
-	//data = bnc->problem_data;
-	//data = (struct GTSP) malloc(sizeof(struct GTSP));
-	
-	//data = &bnc->problem_data;
-	int node_count = data->graph->node_count;
-	int cluster_count = data->cluster_count;
-	int edge_count = data->graph->edge_count;
-	int * tour = (int*) NULL;
-	tour = (int *) malloc( cluster_count * sizeof(int));
-	//Constructing the tour with vertices
-	for (i = 0; i < edge_count; i++)
-	{    //printf("    edge %lf **\n", bnc->best_x[i]);
-			
-		if ((bnc->best_x[i] > 1 - LP_EPSILON)){ 
-			//printf("    x[i] = %lf **\n", bnc->best_x[i]);
-			tour[current_vertex] = (data->graph->edges[i].from)->index;
-			current_vertex += 1;
-			//printf("    Edge No = %d **\n", i);
-			printf("    FROM No = %d **\n", (data->graph->edges[i].from)->index);
-			printf("    TO No = %d **\n", (data->graph->edges[i].to)->index);
-			
-			//printf("    current vertex = %d **\n", current_vertex);
-		}
-	}
-	
-	//reoptmizing the your with two-opt
-	//rval = two_opt(cluster_count, tour, data->dist_matrix);
-	//Optimizing the vertices inside the node_to_cluster
-	int current_cluster = 0;
-	int insertion_cost = 0;
-	
-	//printf("    o-- val = %.2lf **\n", best_val);
-	for(i = 1; i < cluster_count - 2; i++){
-		//printf("    vertex in tour = %d **\n", tour[current_vertex]);
-		current_cluster = data->node_to_cluster[tour[i]];
-		//printf("    o-- val = %.2lf **\n", best_val);
-		insertion_cost = data->dist_matrix[tour[i-1]][tour[i]] +
-			data->dist_matrix[tour[i]][tour[i+1]];
-		//printf("    o-- val = %.2lf **\n", best_val);
-		for(j = 0; j < node_count; j++)
-			if (current_cluster == data->node_to_cluster[j])
-				if (insertion_cost > data->dist_matrix[j][tour[i]] +
-			data->dist_matrix[j][tour[i+1]]){
-				log_info("Optmize vertex in cluster improved the bound\n"); 
-				insertion_cost = data->dist_matrix[j][tour[i]] +
-			data->dist_matrix[j][tour[i+1]];
-			tour[i] = j;
-			}
-	}
-	printf("    o-- val = %.2lf **\n", best_val);
-	for(i = 0; i< cluster_count ; i++){
-		if (i == cluster_count - 1)
-			tour_cost += data->dist_matrix[tour[i]][tour[0]];
-		else
-			tour_cost += data->dist_matrix[tour[i]][tour[i+1]];
-	if(tour_cost < bnc->best_obj_val)
-		bnc->best_obj_val = tour_cost;
-	}
-	return rval;
-}
-*/
-
-/*
-static int two_opt(int tour_length, int*tour, int** dist_matrix){
-	int rval = 0, i;
-	for (i = 1; i < tour_length - 2; i++){
-			int current_cost = dist_matrix[tour[i-1]][tour[i]] + 
-			dist_matrix[tour[i+1]][tour[i+2]];
-			int temp_cost = dist_matrix[tour[i-1]][tour[i+1]] + 
-			dist_matrix[tour[i]][tour[i+2]];
-			if(current_cost > temp_cost){
-				log_info("Two opt improved the bound\n");
-				int temp_vertex = tour[i];
-				tour[i] = tour[i+1];
-				tour[i+1] = temp_vertex;
-			}
-	}
-	return rval;
-}
-*/

@@ -46,8 +46,6 @@ int GTSP_write_problem(struct GTSP *data, char *filename);
 
 int GTSP_write_solution(struct GTSP *data, char *filename, double *x);
 
-int GTSP_main(int argc, char **argv);
-
 int optimize_vertex_in_cluster(struct Tour * tour, struct GTSP *data);
 
 int two_opt(struct Tour * tour, struct GTSP *data);
@@ -63,5 +61,11 @@ int list_length(struct Tour * tour, struct GTSP* data);
 void print_list(struct Tour * tour, struct GTSP* data);
 
 int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x);
+
+int GTSP_solution_found(struct BNC *bnc, struct GTSP *data, double *x);
+
+int GTSP_check_solution(struct GTSP *data, double *x);
+
+int GTSP_read_solution(struct GTSP *gtsp, char *filename, double **p_x);
 
 #endif //_PROJECT_GTSP_H_

@@ -142,7 +142,7 @@ int flow_find_max_flow(
             struct Edge *e = &digraph->edges[i];
             #endif
 
-            if (residual_caps[i] < LP_EPSILON) continue;
+            if (residual_caps[i] < EPSILON) continue;
 
             log_verbose("%d %d %.4lf (%d)\n", e->from->index, e->to->index, e->index,
                     residual_caps[e->index]);
@@ -206,7 +206,7 @@ int flow_find_augmenting_path(
             struct Edge *edge = n->adj[i].edge;
 
             if (neighbor->mark > 0) continue;
-            if (residual_caps[edge->index] < LP_EPSILON) continue;
+            if (residual_caps[edge->index] < EPSILON) continue;
 
             parents[neighbor->index] = n;
             parent_edges[neighbor->index] = edge;
@@ -246,114 +246,5 @@ int flow_find_augmenting_path(
     if (parents) free(parents);
     if (parent_edges) free(parent_edges);
     if (queue) free(queue);
-    return rval;
-}
-
-int flow_main(int argc, char **argv)
-{
-    UNUSED(argc);
-    UNUSED(argv);
-
-    int rval = 0;
-
-    int *edges = 0;
-    double *capacities = 0;
-    double *flow = 0;
-    double flow_value;
-
-    struct Edge **cut_edges = 0;
-
-    FILE *f = fopen("tmp/flow.in", "r");
-    abort_if(!f, "could not open input file");
-
-    struct Graph graph;
-    graph_init(&graph);
-
-    int node_count, edge_count;
-
-    rval = fscanf(f, "%d %d ", &node_count, &edge_count);
-    abort_if(rval != 2, "invalid input format (node count, edge count)");
-
-    int sink, source;
-    rval = fscanf(f, "%d %d", &source, &sink);
-    abort_if(rval != 2, "invalid input format (source, sink)");
-
-    edges = (int *) malloc(4 * edge_count * sizeof(int));
-    abort_if(!edges, "could not allocate edges\n");
-
-    capacities = (double *) malloc(2 * edge_count * sizeof(double));
-    abort_if(!capacities, "could not allocate capacities");
-
-    for (int i = 0; i < edge_count; i++)
-    {
-        int from, to;
-        double cap;
-
-        rval = fscanf(f, "%d %d %lf ", &from, &to, &cap);
-        abort_if(rval != 3, "invalid input format (edge specification)");
-
-        edges[i * 4] = edges[i * 4 + 3] = from;
-        edges[i * 4 + 1] = edges[i * 4 + 2] = to;
-        capacities[2 * i] = cap;
-        capacities[2 * i + 1] = 0;
-    }
-
-    rval = graph_build(node_count, 2 * edge_count, edges, 1, &graph);
-    abort_if(rval, "graph_build failed");
-
-    for (int i = 0; i < edge_count; i++)
-    {
-        graph.edges[2 * i].reverse = &graph.edges[2 * i + 1];
-        graph.edges[2 * i + 1].reverse = &graph.edges[2 * i];
-    }
-
-    flow = (double *) malloc(graph.edge_count * sizeof(double));
-    abort_if(!flow, "could not allocate flow");
-
-    struct Node *from = &graph.nodes[source];
-    struct Node *to = &graph.nodes[sink];
-
-    rval = flow_find_max_flow(&graph, capacities, from, to, flow, &flow_value);
-    abort_if(rval, "flow_find_max_flow failed");
-
-    log_info("Optimal flow has value %f\n", flow_value);
-    for (int i = 0; i < graph.edge_count; i++)
-    {
-        struct Edge *e = &graph.edges[i];
-        if (flow[e->index] <= 0) continue;
-
-        log_info("  %d %d %6.2f / %6.2f\n", e->from->index, e->to->index,
-                flow[e->index], capacities[e->index]);
-    }
-
-    log_info("Nodes reachable from origin on residual graph:\n");
-    for (int i = 0; i < graph.node_count; i++)
-    {
-        struct Node *n = &graph.nodes[i];
-        if (n->mark)
-            log_info("  %d\n", n->index);
-    }
-
-    int cut_edges_count = 0;
-    cut_edges =
-            (struct Edge **) malloc(graph.edge_count * sizeof(struct Edge *));
-    abort_if(!cut_edges, "could not allocate cut_edges");
-
-    rval = get_cut_edges_from_marks(&graph, &cut_edges_count, cut_edges);
-    abort_if(rval, "get_cut_edges_from_marks failed");
-
-    log_info("Min cut edges:\n");
-    for (int i = 0; i < cut_edges_count; i++)
-    {
-        struct Edge *e = cut_edges[i];
-        if (capacities[e->index] <= 0) continue;
-        log_info("  %d %d\n", e->from->index, e->to->index);
-    }
-
-    CLEANUP:
-    if (cut_edges) free(cut_edges);
-    if (capacities) free(capacities);
-    if (edges) free(edges);
-    if (flow) free(flow);
     return rval;
 }

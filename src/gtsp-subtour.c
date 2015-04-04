@@ -1,12 +1,32 @@
 #include "gtsp-subtour.h"
 #include <assert.h>
-#include <float.h>
 #include "util.h"
 #include "flow.h"
 
-extern double SUBTOUR_TIME;
+static void deactivate_cluster_node(double *capacities, struct Node *cluster_node)
+{
+    for (int i = 0; i < cluster_node->degree; i++)
+    {
+        struct Adjacency *adj = &cluster_node->adj[i];
+        struct Edge *e = adj->edge;
 
-int static build_flow_digraph(
+        capacities[e->index] = 0;
+    }
+}
+
+static void activate_cluster_node(double *capacities, struct Node *cluster_node)
+{
+    for (int i = 0; i < cluster_node->degree; i++)
+    {
+        struct Adjacency *adj = &cluster_node->adj[i];
+        struct Edge *e = adj->edge;
+
+        capacities[e->index] = 1e10;
+        capacities[e->reverse->index] = 1e10;
+    }
+}
+
+static int build_flow_digraph(
         struct GTSP *data, double *x, struct Graph *digraph, double *capacities)
 {
     int rval = 0;
@@ -16,9 +36,8 @@ int static build_flow_digraph(
     int node_count = data->graph->node_count;
     struct Graph *graph = data->graph;
 
-    int digraph_node_count = node_count + data->cluster_count + 1;
-    int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count +
-            2 * data->cluster_count;
+    int digraph_node_count = node_count + data->cluster_count;
+    int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count;
 
     digraph_edges = (int *) malloc(2 * digraph_edge_count * sizeof(int));
     abort_if(!digraph_edges, "could not allocate digraph_edges");
@@ -28,7 +47,7 @@ int static build_flow_digraph(
     int kc = 0;
     for (int i = 0; i < graph->edge_count; i++)
     {
-        if (x[i] < LP_EPSILON) continue;
+        if (x[i] < EPSILON) continue;
 
         struct Edge *e = &graph->edges[i];
         int from = e->from->index;
@@ -67,19 +86,6 @@ int static build_flow_digraph(
         capacities[kc++] = 0;
     }
 
-    // Create an extra root node and connect it to each cluster node through
-    // some edge with zero capacity
-    for (int i = 0; i < data->cluster_count; i++)
-    {
-        digraph_edges[ke++] = node_count + i;
-        digraph_edges[ke++] = node_count + data->cluster_count;
-        capacities[kc++] = 0;
-
-        digraph_edges[ke++] = node_count + data->cluster_count;
-        digraph_edges[ke++] = node_count + i;
-        capacities[kc++] = 0;
-    }
-
     assert(ke <= 2 * digraph_edge_count);
     assert(kc <= digraph_edge_count);
 
@@ -99,10 +105,8 @@ int static build_flow_digraph(
     return rval;
 }
 
-int add_subtour_cut(
-        struct LP *lp,
-        struct Edge **cut_edges,
-        int cut_edges_count)
+static int add_subtour_cut(
+        struct LP *lp, struct Edge **cut_edges, int cut_edges_count)
 {
     int rval = 0;
 
@@ -135,7 +139,7 @@ int add_subtour_cut(
         double sum = 0;
         for (int i = 0; i < newnz; i++)
             sum += rmatval[i] * OPTIMAL_X[rmatind[i]];
-        abort_if(sum <= rhs - LP_EPSILON, "cannot add invalid cut");
+        abort_if(sum <= rhs - EPSILON, "cannot add invalid cut");
     }
 
     struct Row *cut = 0;
@@ -155,19 +159,27 @@ int add_subtour_cut(
     return rval;
 }
 
-int find_exact_subtour_cuts(
-        struct LP *lp, struct GTSP *data, double min_cut_violation)
+int GTSP_find_exact_subtour_cuts(struct LP *lp, struct GTSP *data)
 {
     int rval = 0;
 
     double *x = 0;
+    double *flow = 0;
     double *capacities = 0;
-    double initial_time = get_current_time();
+    struct Edge **cut_edges = 0;
+
+    double initial_time = get_user_time();
 
     int added_cuts_count = 0;
     struct Graph *graph = data->graph;
+    const int edge_count = graph->edge_count;
+    const int node_count = graph->node_count;
+    const int cluster_count = data->cluster_count;
 
     int num_cols = LP_get_num_cols(lp);
+    int digraph_edge_count = 4 * edge_count + 2 * node_count;
+    int original_cut_pool_size = lp->cut_pool_size;
+
     x = (double *) malloc(num_cols * sizeof(double));
     abort_if(!x, "could not allocate x");
 
@@ -181,78 +193,36 @@ int find_exact_subtour_cuts(
 
     struct Graph digraph;
     graph_init(&digraph);
-    int digraph_edge_count = 4 * graph->edge_count + 2 * graph->node_count +
-            2 * data->cluster_count;
 
-    int original_cut_pool_size = lp->cut_pool_size;
-
+    flow = (double *) malloc(digraph_edge_count * sizeof(double));
     capacities = (double *) malloc(digraph_edge_count * sizeof(double));
+    cut_edges = (struct Edge **) malloc(edge_count * sizeof(struct Edge *));
+
+    abort_if(!flow, "could not allocate flow");
     abort_if(!capacities, "could not allocate capacities");
+    abort_if(!cut_edges, "could not allocate cut_edges");
 
     rval = build_flow_digraph(data, x, &digraph, capacities);
     abort_if(rval, "build_flow_digraph failed");
 
-    rval = find_exact_subtour_cuts_cluster_to_cluster(lp, data, &digraph,
-            capacities, min_cut_violation);
-    abort_if(rval, "find_exact_subtour_cuts_cluster_to_cluster failed");
-
-    added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
-    log_debug("    %d cluster-to-cluster\n", added_cuts_count);
-    SUBTOUR_CLUSTER_CLUSTER_COUNT += added_cuts_count;
-    if (added_cuts_count > 0)
-        goto CLEANUP;
-
-    SUBTOUR_TIME += get_current_time() - initial_time;
-
-    CLEANUP:
-    graph_free(&digraph);
-    if (capacities) free(capacities);
-    if (x) free(x);
-    return rval;
-}
-
-int find_exact_subtour_cuts_cluster_to_cluster(
-        struct LP *lp,
-        struct GTSP *data,
-        struct Graph *digraph,
-        double *capacities,
-        double min_cut_violation)
-{
-    int rval = 0;
-
-    double *flow = 0;
-    struct Edge **cut_edges = 0;
-
     int cuts_count = 0;
 
-    struct Graph *graph = data->graph;
-
-    cut_edges = (struct Edge **) malloc(
-            graph->edge_count * sizeof(struct Edge *));
-    flow = (double *) malloc(digraph->edge_count * sizeof(double));
-    abort_if(!cut_edges, "could not allocate cut_edges");
-    abort_if(!flow, "could not allocate flow");
-
-    struct Node *root_node = &digraph->nodes[graph->node_count +
-            data->cluster_count];
-
-    for (int i = 0; i < data->cluster_count; i++)
+    for (int i = 0; i < cluster_count; i++)
     {
-        for (int j = i + 1; j < data->cluster_count; j++)
+        for (int j = i + 1; j < cluster_count; j++)
         {
-            struct Node *from = &digraph->nodes[graph->node_count + i];
-            struct Node *to = &digraph->nodes[graph->node_count + j];
+            struct Node *from = &digraph.nodes[node_count + i];
+            struct Node *to = &digraph.nodes[node_count + j];
 
             double flow_value;
             int cut_edges_count;
 
             activate_cluster_node(capacities, from);
             activate_cluster_node(capacities, to);
-            deactivate_cluster_node(capacities, root_node);
 
             log_verbose("Sending flow from cluster %d to cluster %d\n", i, j);
 
-            rval = flow_find_max_flow(digraph, capacities, from, to, flow,
+            rval = flow_find_max_flow(&digraph, capacities, from, to, flow,
                     &flow_value);
 
             abort_if(rval, "flow_find_max_flow failed");
@@ -262,13 +232,13 @@ int find_exact_subtour_cuts_cluster_to_cluster(
             deactivate_cluster_node(capacities, from);
             deactivate_cluster_node(capacities, to);
 
-            if (flow_value >= 2 - min_cut_violation) continue;
+            if (flow_value >= 2 - EPSILON) continue;
 
             log_verbose("Marked nodes:\n");
-            for (int k = 0; k < graph->node_count; k++)
+            for (int k = 0; k < node_count; k++)
             {
-                graph->nodes[k].mark = digraph->nodes[k].mark;
-                if (digraph->nodes[k].mark) log_verbose("    %d\n", k);
+                graph->nodes[k].mark = digraph.nodes[k].mark;
+                if (digraph.nodes[k].mark) log_verbose("    %d\n", k);
             }
 
             rval = get_cut_edges_from_marks(graph, &cut_edges_count, cut_edges);
@@ -286,31 +256,17 @@ int find_exact_subtour_cuts_cluster_to_cluster(
         }
     }
 
+    added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
+    log_debug("    %d cluster-to-cluster\n", added_cuts_count);
+
+    SUBTOUR_COUNT += added_cuts_count;
+    SUBTOUR_TIME += get_user_time() - initial_time;
+
     CLEANUP:
+    graph_free(&digraph);
+    if (capacities) free(capacities);
     if (cut_edges) free(cut_edges);
     if (flow) free(flow);
+    if (x) free(x);
     return rval;
-}
-
-void deactivate_cluster_node(double *capacities, struct Node *cluster_node)
-{
-    for (int i = 0; i < cluster_node->degree; i++)
-    {
-        struct Adjacency *adj = &cluster_node->adj[i];
-        struct Edge *e = adj->edge;
-
-        capacities[e->index] = 0;
-    }
-}
-
-void activate_cluster_node(double *capacities, struct Node *cluster_node)
-{
-    for (int i = 0; i < cluster_node->degree; i++)
-    {
-        struct Adjacency *adj = &cluster_node->adj[i];
-        struct Edge *e = adj->edge;
-
-        capacities[e->index] = 1e10;
-        capacities[e->reverse->index] = 1e10;
-    }
 }

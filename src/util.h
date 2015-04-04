@@ -48,18 +48,11 @@
     fprintf(stderr, "%28s:%d " msg "\n", __FILE__, __LINE__, __VA_ARGS__); \
     rval = 1; goto CLEANUP; }
 
-#define swap(x, y) do \
-   { unsigned char swap_temp[sizeof(x)]; \
-     memcpy(swap_temp,&y,sizeof(x)); \
-     memcpy(&y,&x, sizeof(x)); \
-     memcpy(&x,swap_temp,sizeof(x)); \
-    } while(0)
-
 #define UNUSED(x) (void)(x)
 
 void time_printf(const char *fmt, ...);
 
-double get_current_time(void);
+double get_user_time(void);
 
 double get_real_time();
 

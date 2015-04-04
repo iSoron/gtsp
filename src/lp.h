@@ -69,10 +69,6 @@ int LP_get_x(struct LP *lp, double *x);
 
 int LP_get_num_cols(struct LP *lp);
 
-int LP_remove_old_cuts(struct LP *lp);
-
-int LP_update_hash(struct Row *cut);
-
 int LP_add_cut(struct LP *lp, struct Row *cut);
 
 #endif

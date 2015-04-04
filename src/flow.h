@@ -23,8 +23,4 @@ int flow_find_max_flow(
 int flow_mark_reachable_nodes(
         const struct Graph *graph, double *residual_caps, struct Node *from);
 
-int flow_main(int argc, char **argv);
-
-#include "graph.h"
-
 #endif //_PROJECT_FLOW_H_

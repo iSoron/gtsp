@@ -10,8 +10,6 @@ struct BNC
     double *best_x;
     double best_obj_val;
 
-    double *optimal_x;
-
     int *problem_data;
 
     int (*problem_init_lp)(struct LP *, void *);
@@ -28,10 +26,6 @@ int BNC_solve(struct BNC *bnc);
 int BNC_init_lp(struct BNC *bnc);
 
 void BNC_free(struct BNC *bnc);
-
-int re_optimize_integral(struct BNC *bnc);
-
-//int optimize_vertex_in_cluster(struct BNC *bnc, double best_val);
 
 extern int BNC_NODE_COUNT;
 

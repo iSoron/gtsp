@@ -1,17 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <getopt.h>
-#include <math.h>
 #include <assert.h>
-#include <sys/stat.h>
-#include <float.h>
 #include "gtsp.h"
 #include "geometry.h"
 #include "util.h"
 #include "gtsp-subtour.h"
 #include "gtsp-comb.h"
 
-int large_neighborhood_search(struct Tour *tour, struct GTSP *data, int *tour_cost);
+int large_neighborhood_search(
+        struct Tour *tour,
+        struct GTSP *data,
+        int *tour_cost);
 
 int build_edge_map(struct GTSP *gtsp, int *edge_map);
 
@@ -231,7 +230,8 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
         }
 
         current_round++;
-        abort_if(get_current_time() - INITIAL_TIME >= MAX_TOTAL_TIME, "time limit exceeded");
+        abort_if(get_user_time() - INITIAL_TIME >= MAX_TOTAL_TIME,
+                "time limit exceeded");
 
         int original_cut_pool_size;
         int added_cuts_count;
@@ -239,24 +239,22 @@ int GTSP_add_cutting_planes(struct LP *lp, struct GTSP *data)
         original_cut_pool_size = lp->cut_pool_size;
         log_debug("Finding subtour cuts, round %d...\n", current_round);
 
-        rval = find_exact_subtour_cuts(lp, data, LP_EPSILON);
-        abort_if(rval, "find_exact_subtour_cuts failed");
+        rval = GTSP_find_exact_subtour_cuts(lp, data);
+        abort_if(rval, "GTSP_find_exact_subtour_cuts failed");
 
         added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
         if (added_cuts_count > 0)
             continue;
 
-#ifdef ENABLE_COMB_INEQUALITIES
         original_cut_pool_size = lp->cut_pool_size;
         log_debug("Finding comb cuts, round %d...\n", current_round);
 
-        rval = find_comb_cuts(lp, data);
-        abort_if(rval, "find_comb_cuts failed");
+        rval = GTSP_find_comb_cuts(lp, data);
+        abort_if(rval, "GTSP_find_comb_cuts failed");
 
         added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
         if (added_cuts_count > 0)
             continue;
-#endif
 
         break;
     }
@@ -303,7 +301,7 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
 
     int positive_edge_count = 0;
     for (int i = 0; i < edge_count; i++)
-        if (x[i] > LP_EPSILON)
+        if (x[i] > EPSILON)
             positive_edge_count++;
 
     fprintf(file, "%d %d\n", node_count, edge_count);
@@ -311,7 +309,7 @@ int GTSP_write_solution(struct GTSP *data, char *filename, double *x)
     fprintf(file, "%d\n", positive_edge_count);
 
     for (int i = 0; i < edge_count; i++)
-        if (x[i] > LP_EPSILON)
+        if (x[i] > EPSILON)
             fprintf(file, "%d %d %.4lf\n", edges[i].from->index,
                     edges[i].to->index, x[i]);
 
@@ -368,7 +366,7 @@ int GTSP_read_solution(struct GTSP *gtsp, char *filename, double **p_x)
 
     for (int i = 0; i < edge_count; i++)
     {
-        if (x[i] <= LP_EPSILON) continue;
+        if (x[i] <= EPSILON) continue;
         log_debug("    x%-5d = %.6f\n", i, x[i]);
     }
 
@@ -420,10 +418,10 @@ int GTSP_check_solution(struct GTSP *data, double *x)
 
     for (int i = 0; i < edge_count; i++)
     {
-        abort_iff(x[i] < 1.0 - LP_EPSILON && x[i] > LP_EPSILON,
+        abort_iff(x[i] < 1.0 - EPSILON && x[i] > EPSILON,
                 "solution is not integral: x%d = %.4lf", i, x[i]);
 
-        abort_iff(x[i] > 1.0 + LP_EPSILON || x[i] < 0.0 - LP_EPSILON,
+        abort_iff(x[i] > 1.0 + EPSILON || x[i] < 0.0 - EPSILON,
                 "value out of bounds: x%d = %.4lf", i, x[i]);
     }
 
@@ -435,7 +433,7 @@ int GTSP_check_solution(struct GTSP *data, double *x)
 
     int initial;
     for (initial = 0; initial < edge_count; initial++)
-        if (x[initial] > 1.0 - LP_EPSILON) break;
+        if (x[initial] > 1.0 - EPSILON) break;
 
     abort_if(initial == edge_count, "no initial node");
 
@@ -453,7 +451,7 @@ int GTSP_check_solution(struct GTSP *data, double *x)
             struct Node *neighbor = adj->neighbor;
 
             if (neighbor->mark) continue;
-            if (x[adj->edge->index] < LP_EPSILON) continue;
+            if (x[adj->edge->index] < EPSILON) continue;
 
             stack[stack_top++] = neighbor;
             neighbor->mark = 1;
@@ -479,12 +477,12 @@ int GTSP_solution_found(struct BNC *bnc, struct GTSP *data, double *x)
     UNUSED(bnc);
 
     int rval = 0;
-	int tour_cost;
+    int tour_cost;
     char filename[100];
-	double *best_val = &bnc->best_obj_val;
-	
-	struct Tour* tour;
-	tour = (struct Tour*) malloc(data->cluster_count*sizeof(struct Tour));
+    double *best_val = &bnc->best_obj_val;
+
+    struct Tour *tour;
+    tour = (struct Tour *) malloc(data->cluster_count * sizeof(struct Tour));
 
     sprintf(filename, "tmp/gtsp-m%d-n%d-s%d.out", data->cluster_count,
             data->graph->node_count, SEED);
@@ -493,316 +491,25 @@ int GTSP_solution_found(struct BNC *bnc, struct GTSP *data, double *x)
     rval = GTSP_write_solution(data, filename, x);
     abort_if(rval, "GTSP_write_solution failed");
 
-	rval = build_tour_from_x(data,tour,x);
-	abort_if(rval, "build_tour_from_x failed");
+    rval = build_tour_from_x(data, tour, x);
+    abort_if(rval, "build_tour_from_x failed");
 
-	rval = large_neighborhood_search(tour, data, &tour_cost);
-	abort_if(rval, "large_neighborhood_search failed");
+    rval = large_neighborhood_search(tour, data, &tour_cost);
+    abort_if(rval, "large_neighborhood_search failed");
 
-	if(tour_cost  + LP_EPSILON < *best_val){
-		log_info("Local search improve the integral solution\n");
-		log_info("         obj val = %f\n",*best_val );
-		log_info("         after LNS = %d\n",tour_cost );
-		*best_val = tour_cost;
-	}
-	 
+    if (tour_cost + EPSILON < *best_val)
+    {
+        log_info("Local search improve the integral solution\n");
+        log_info("         obj val = %f\n", *best_val);
+        log_info("         after LNS = %d\n", tour_cost);
+        *best_val = tour_cost;
+    }
+
     log_info("Checking solution...\n");
     rval = GTSP_check_solution(data, x);
     abort_if(rval, "GTSP_check_solution failed");
 
     CLEANUP:
-    return rval;
-}
-
-static const struct option options_tab[] = {{"help", no_argument, 0, 'h'},
-        {"nodes", required_argument, 0, 'n'},
-        {"clusters", required_argument, 0, 'm'},
-        {"grid-size", required_argument, 0, 'g'},
-        {"optimal", required_argument, 0, 'x'},
-        {"seed", required_argument, 0, 's'},
-        {(char *) 0, (int) 0, (int *) 0, (int) 0}};
-static int input_node_count = -1;
-static int input_cluster_count = -1;
-static int grid_size = 100;
-
-static char input_x_filename[1000] = {0};
-
-static void GTSP_print_usage()
-{
-    printf("Parameters:\n");
-    printf("%4s %-13s %s\n", "-n", "--nodes", "number of nodes");
-    printf("%4s %-13s %s\n", "-m", "--clusters", "number of clusters");
-    printf("%4s %-13s %s\n", "-s", "--seed", "random seed");
-    printf("%4s %-13s %s\n", "-g", "--grid-size",
-            "size of the box used for generating random points");
-    printf("%4s %-13s %s\n", "-x", "--optimal",
-            "file containg valid solution (used to assert validity of cuts)");
-}
-
-static int GTSP_parse_args(int argc, char **argv)
-{
-    int rval = 0;
-
-    opterr = 0;
-
-    while (1)
-    {
-        int c = 0;
-        int option_index = 0;
-        c = getopt_long(argc, argv, "n:m:g:x:s:", options_tab, &option_index);
-
-        if (c < 0) break;
-
-        switch (c)
-        {
-            case 'n':
-                input_node_count = atoi(optarg);
-                break;
-
-            case 'm':
-                input_cluster_count = atoi(optarg);
-                break;
-
-            case 'g':
-                grid_size = atoi(optarg);
-                break;
-
-            case 'x':
-                strcpy(input_x_filename, optarg);
-                break;
-
-            case 's':
-                SEED = (unsigned) atoi(optarg);
-                break;
-
-            case ':':
-                fprintf(stderr, "option '-%c' requires an argument\n", optopt);
-                rval = 1;
-                goto CLEANUP;
-
-            case '?':
-            default:
-                fprintf(stderr, "option '-%c' is invalid\n", optopt);
-                rval = 1;
-                goto CLEANUP;
-
-        }
-    }
-
-    if (input_cluster_count < 0)
-    {
-        input_cluster_count = (int) ceil(input_node_count / 5.0);
-        if (input_cluster_count < 3) input_cluster_count = 3;
-    }
-
-    if (input_node_count < 0)
-    {
-        printf("You must specify the number of nodes.\n");
-        rval = 1;
-    }
-
-    if (input_cluster_count > input_node_count)
-    {
-        printf("Number of clusters must be at most number of nodes.\n");
-        rval = 1;
-    }
-
-    if (rval)
-    {
-        GTSP_print_usage();
-        rval = 1;
-    }
-
-    CLEANUP:
-    return rval;
-}
-
-int GTSP_main(int argc, char **argv)
-{
-    int rval = 0;
-
-    struct BNC bnc;
-    struct GTSP data;
-
-    double *initial_x = 0;
-    double initial_time = get_current_time();
-
-    SEED = (unsigned int) get_real_time() % 1000;
-
-    rval = GTSP_init_data(&data);
-    abort_if(rval, "GTSP_init_data failed");
-
-    rval = BNC_init(&bnc);
-    abort_if(rval, "BNC_init failed");
-
-    rval = GTSP_parse_args(argc, argv);
-    if (rval) return 1;
-
-    srand(SEED);
-
-    log_info("Generating random GTSP instance...\n");
-    log_info("    seed = %d\n", SEED);
-    log_info("    input_node_count = %d\n", input_node_count);
-    log_info("    input_cluster_count = %d\n", input_cluster_count);
-    log_info("    grid_size = %d\n", grid_size);
-
-    char instance_name[1000];
-    sprintf(instance_name, "gtsp-m%d-n%d-s%d", input_cluster_count,
-            input_node_count, SEED);
-
-    rval = GTSP_create_random_problem(input_node_count, input_cluster_count,
-            grid_size, &data);
-    abort_if(rval, "GTSP_create_random_problem failed");
-
-    char filename[100];
-    sprintf(filename, "input/%s.in", instance_name);
-    log_info("Writing random instance to file %s\n", filename);
-    rval = GTSP_write_problem(&data, filename);
-    abort_if(rval, "GTSP_write_problem failed");
-
-#if LOG_LEVEL >= LOG_LEVEL_DEBUG
-    log_info("Writing random instance to file gtsp.in\n");
-    rval = GTSP_write_problem(&data, "gtsp.in");
-    #endif
-
-    int init_val = 0;
-//
-    initial_x = (double *) malloc(
-            (data.graph->node_count + data.graph->edge_count) * sizeof(double));
-    abort_if(!initial_x, "could not allocate initial_x");
-
-    rval = inital_tour_value(&data, &init_val, initial_x);
-    abort_if(rval, "initial_tour_value failed");
-
-    rval = GTSP_solution_found(&bnc, &data, initial_x);
-    abort_if(rval, "check_sol failed");
-
-    bnc.best_x = initial_x;
-    bnc.best_obj_val = init_val;
-    bnc.problem_data = (void *) &data;
-    bnc.problem_init_lp = (int (*)(struct LP *, void *)) GTSP_init_lp;
-    bnc.problem_add_cutting_planes = (int (*)(
-            struct LP *, void *)) GTSP_add_cutting_planes;
-    bnc.problem_solution_found = (int (*)(
-            struct BNC *, void *, double *)) GTSP_solution_found;
-
-    double opt_val = 0.0;
-
-    if (strlen(input_x_filename) == 0)
-    {
-        sprintf(input_x_filename, "optimal/%s.out", instance_name);
-
-        FILE *file = fopen(input_x_filename, "r");
-
-        if (!file)
-            input_x_filename[0] = 0;
-        else
-            fclose(file);
-    }
-
-    if (strlen(input_x_filename) > 0)
-    {
-        rval = GTSP_read_solution(&data, input_x_filename, &OPTIMAL_X);
-        abort_if(rval, "GTSP_read_solution failed");
-
-        log_info("Optimal solution is available. Cuts will be checked.\n");
-
-        for (int i = 0; i < data.graph->edge_count; i++)
-        {
-            struct Edge *e = &data.graph->edges[i];
-            opt_val += OPTIMAL_X[i] * e->weight;
-        }
-
-        log_info("    opt = %.2lf\n", opt_val);
-    }
-
-    log_info("Initializing LP...\n");
-    rval = BNC_init_lp(&bnc);
-    abort_if(rval, "BNC_init_lp failed");
-
-//    log_info("Writing LP to file gtsp.lp...\n");
-//    rval = LP_write(bnc.lp, "gtsp.lp");
-//    abort_if(rval, "LP_write failed");
-
-    log_info("Starting branch-and-cut solver...\n");
-    rval = BNC_solve(&bnc);
-    abort_if(rval, "BNC_solve_node failed");
-
-    abort_if(!bnc.best_x, "problem has no feasible solution");
-
-    log_info("Optimal integral solution:\n");
-    log_info("    obj value = %.2lf **\n", bnc.best_obj_val);
-
-    if (OPTIMAL_X)
-    {
-        abort_iff(bnc.best_obj_val - LP_EPSILON > opt_val,
-                "Solution is not optimal: %.4lf > %.4lf", bnc.best_obj_val,
-                opt_val);
-    }
-
-    TOTAL_TIME = get_current_time() - initial_time;
-
-    log_info("Branch-and-bound nodes: %d\n", BNC_NODE_COUNT);
-    log_info("LP optimize calls: %d\n", LP_SOLVE_COUNT);
-    log_info("LP solving time: %.2lf\n", LP_SOLVE_TIME);
-    log_info("LP cut pool management time: %.2lf\n", CUT_POOL_TIME);
-
-    FILE *file = fopen("stats.tab", "a");
-    abort_if(!file, "could not open stats.tab");
-
-
-    struct stat st;
-    stat("stats.tab", &st);
-
-    if(st.st_size == 0)
-    {
-        fprintf(file, "%-20s  ", "instance");
-        fprintf(file, "%-8s  ", "time");
-        fprintf(file, "%-8s  ", "subt-t");
-        fprintf(file, "%-8s  ", "combs-t");
-        fprintf(file, "%-8s  ", "pool-t");
-        fprintf(file, "%-8s  ", "pool-m");
-        fprintf(file, "%-8s  ", "lp-count");
-        fprintf(file, "%-8s  ", "lp-time");
-        fprintf(file, "%-8s  ", "lp-rows");
-        fprintf(file, "%-8s  ", "lp-cols");
-        fprintf(file, "%-8s  ", "init-v");
-        fprintf(file, "%-8s  ", "opt-v");
-        fprintf(file, "%-8s  ", "root-v");
-        fprintf(file, "%-8s  ", "nodes");
-        fprintf(file, "%-8s  ", "subt-cc");
-        fprintf(file, "%-8s  ", "subt-nc");
-        fprintf(file, "%-8s  ", "subt-nn");
-        fprintf(file, "%-8s  ", "combs");
-
-        fprintf(file, "\n");
-    }
-
-    fprintf(file, "%-20s  ", instance_name);
-    fprintf(file, "%-8.2lf  ", TOTAL_TIME);
-    fprintf(file, "%-8.2lf  ", SUBTOUR_TIME);
-    fprintf(file, "%-8.2lf  ", COMBS_TIME);
-    fprintf(file, "%-8.2lf  ", CUT_POOL_TIME);
-    fprintf(file, "%-8ld  ", CUT_POOL_MAX_MEMORY/1024/1024);
-    fprintf(file, "%-8d  ", LP_SOLVE_COUNT);
-    fprintf(file, "%-8.2lf  ", LP_SOLVE_TIME);
-    fprintf(file, "%-8d  ", LP_MAX_ROWS);
-    fprintf(file, "%-8d  ", LP_MAX_COLS);
-    fprintf(file, "%-8d  ", init_val);
-    fprintf(file, "%-8.0lf  ", bnc.best_obj_val);
-    fprintf(file, "%-8.0lf  ", ROOT_VALUE);
-    fprintf(file, "%-8d  ", BNC_NODE_COUNT);
-    fprintf(file, "%-8d  ", SUBTOUR_CLUSTER_CLUSTER_COUNT);
-    fprintf(file, "%-8d  ", SUBTOUR_NODE_CLUSTER_COUNT);
-    fprintf(file, "%-8d  ", SUBTOUR_NODE_NODE_COUNT);
-    fprintf(file, "%-8d  ", COMBS_COUNT);
-    fprintf(file, "\n");
-    fclose(file);
-
-    CLEANUP:
-    if (OPTIMAL_X) free(OPTIMAL_X);
-    GTSP_free(&data);
-    BNC_free(&bnc);
     return rval;
 }
 
@@ -823,11 +530,11 @@ int build_x_from_tour(struct GTSP *data, struct Tour *tour, double *x)
     for (int i = 0; i < edge_count; i++)
         x[i] = 0.0;
 
-	int next_vertex = tour[0].next;
-	int current_vertex = tour[0].vertex;
+    int next_vertex = tour[0].next;
+    int current_vertex = tour[0].vertex;
     for (int i = 0; i < data->cluster_count; i++)
     {
-        int from = current_vertex; 
+        int from = current_vertex;
         int to = tour[next_vertex].vertex;
         current_vertex = tour[next_vertex].vertex;
         next_vertex = tour[next_vertex].next;
@@ -843,7 +550,7 @@ int build_x_from_tour(struct GTSP *data, struct Tour *tour, double *x)
 int inital_tour_value(struct GTSP *data, int *tour_cost, double *x)
 {
     int rval = 0;
-	
+
     int cluster_count = data->cluster_count;
 
     struct Tour *tour = 0;
@@ -864,82 +571,94 @@ int inital_tour_value(struct GTSP *data, int *tour_cost, double *x)
         if (data->node_to_cluster[0] != i)
         {
             uncovered_sets[cluster_num] = i;
-            cluster_num ++;
+            cluster_num++;
         }
     }
 
     int new_vertex = 1, cost;
-    
+
     tour[0].vertex = 0;
     cluster_in_tour[0] = 1;
-	
+
     while (new_vertex < data->cluster_count)
     {
         int min_dist_vertex = -1;
         int min_cost = INT_MAX;
-		
+
         for (int i = 1; i < data->graph->node_count; i++)
         {
             if (cluster_in_tour[data->node_to_cluster[i]]) continue;
-            
-			for (int k = 0; k < new_vertex; k++)
-			{
-				cost = data->dist_matrix[i][tour[k].vertex];
-				if (cost < min_cost)
-				{ min_cost = cost;
-				  min_dist_vertex = i;
-				}
-			}
+
+            for (int k = 0; k < new_vertex; k++)
+            {
+                cost = data->dist_matrix[i][tour[k].vertex];
+                if (cost < min_cost)
+                {
+                    min_cost = cost;
+                    min_dist_vertex = i;
+                }
+            }
         }
-		
+
         assert(min_dist_vertex >= 0);
-		int cluster_to_insert = data->node_to_cluster[min_dist_vertex];
-		cluster_in_tour[cluster_to_insert] = 1;
-		
-		min_cost = INT_MAX;
-		
-		int insertion_cost = -1, best_pose = -1, best_vertex = -1;
-			
-		for (int k=0 ; k < data->clusters[cluster_to_insert].size; k++){
-			for(int j = 0; j < new_vertex; j++){
-				int vertex_to_insert = data->clusters[cluster_to_insert].nodes[k];
-				if (new_vertex ==1){
-					int vertex1 = tour[0].vertex; 
-					insertion_cost = data->dist_matrix[vertex_to_insert][vertex1] 
-					+ data->dist_matrix[vertex1][vertex_to_insert];
-				}else{
-				int vertex1 = tour[j].vertex;
-				int vertex2 = tour[tour[j].next].vertex;
-				insertion_cost = data->dist_matrix[vertex1][vertex_to_insert] 
-					+ data->dist_matrix[vertex_to_insert][vertex2] - 
-					data->dist_matrix[vertex1][vertex2];	 
-				}
-				if(insertion_cost < min_cost){
-					min_cost = insertion_cost;
-					best_pose = j;
-					best_vertex = vertex_to_insert;
-				}
-			}
-		}
-		
-		tour[new_vertex].vertex = best_vertex;
-		tour[new_vertex].prev = best_pose;
-		
-		if (new_vertex ==1){
-			tour[new_vertex].next = best_pose;
-			tour[best_pose].prev = new_vertex;
-		}else{
-			int temp_vertex = tour[best_pose].next;
-			tour[new_vertex].next = temp_vertex;
-			tour[temp_vertex].prev = new_vertex;
-		}
-		tour[best_pose].next = new_vertex;
-		
+        int cluster_to_insert = data->node_to_cluster[min_dist_vertex];
+        cluster_in_tour[cluster_to_insert] = 1;
+
+        min_cost = INT_MAX;
+
+        int insertion_cost = -1, best_pose = -1, best_vertex = -1;
+
+        for (int k = 0; k < data->clusters[cluster_to_insert].size; k++)
+        {
+            for (int j = 0; j < new_vertex; j++)
+            {
+                int vertex_to_insert = data->clusters[cluster_to_insert]
+                        .nodes[k];
+                if (new_vertex == 1)
+                {
+                    int vertex1 = tour[0].vertex;
+                    insertion_cost =
+                            data->dist_matrix[vertex_to_insert][vertex1] +
+                                    data->dist_matrix[vertex1][vertex_to_insert];
+                }
+                else
+                {
+                    int vertex1 = tour[j].vertex;
+                    int vertex2 = tour[tour[j].next].vertex;
+                    insertion_cost =
+                            data->dist_matrix[vertex1][vertex_to_insert] +
+                                    data->dist_matrix[vertex_to_insert][vertex2] -
+                                    data->dist_matrix[vertex1][vertex2];
+                }
+                if (insertion_cost < min_cost)
+                {
+                    min_cost = insertion_cost;
+                    best_pose = j;
+                    best_vertex = vertex_to_insert;
+                }
+            }
+        }
+
+        tour[new_vertex].vertex = best_vertex;
+        tour[new_vertex].prev = best_pose;
+
+        if (new_vertex == 1)
+        {
+            tour[new_vertex].next = best_pose;
+            tour[best_pose].prev = new_vertex;
+        }
+        else
+        {
+            int temp_vertex = tour[best_pose].next;
+            tour[new_vertex].next = temp_vertex;
+            tour[temp_vertex].prev = new_vertex;
+        }
+        tour[best_pose].next = new_vertex;
+
         new_vertex += 1;
     }
 
     tour[data->cluster_count].vertex = 0;
-	
 
     rval = large_neighborhood_search(tour, data, tour_cost);
     abort_if(rval, "large_neighborhood_search failed");
@@ -1027,7 +746,10 @@ int two_opt(struct Tour *tour, struct GTSP *data)
     return 0;
 }
 
-int large_neighborhood_search(struct Tour *tour, struct GTSP *data, int *tour_cost)
+int large_neighborhood_search(
+        struct Tour *tour,
+        struct GTSP *data,
+        int *tour_cost)
 {
     int rval = 0;
 
@@ -1035,15 +757,14 @@ int large_neighborhood_search(struct Tour *tour, struct GTSP *data, int *tour_co
     int *clusters = data->node_to_cluster;
     int **dist_matrix = data->dist_matrix;
     struct Cluster *vertex_set = data->clusters;
-	
+
     //LNS starts
     for (int iter = 0; iter < 2000; iter++)
     {
         //Delete a random vertex
-        
+
         int delete_vertex = rand() % (cluster_count - 1) + 1;
-        
-		
+
         int prev_vertex = tour[delete_vertex].prev;
         int next_vertex = tour[delete_vertex].next;
 
@@ -1090,19 +811,19 @@ int large_neighborhood_search(struct Tour *tour, struct GTSP *data, int *tour_co
         tour[delete_vertex].next = next_vertex;
         tour[best_pose].next = delete_vertex;
         tour[next_vertex].prev = delete_vertex;
-		
+
         rval = optimize_vertex_in_cluster(tour, data);
         abort_if(rval, "optimize_vertex_in_cluster failed");
     }
-    
-	rval = K_opt(tour, data);
+
+    rval = K_opt(tour, data);
     abort_if(rval, "two_opt failed");
-    
+
     rval = two_opt(tour, data);
     abort_if(rval, "two_opt failed");
-   
+
     *tour_cost = list_length(tour, data);
-    
+
     CLEANUP:
     //if (vertex_seq) free(vertex_seq);
     return rval;
@@ -1158,67 +879,69 @@ void print_list(struct Tour *tour, struct GTSP *data)
     printf("\n");
 }
 
-int K_opt(struct Tour* tour, struct GTSP *data)
+int K_opt(struct Tour *tour, struct GTSP *data)
 {
-	 
-	int cluster_count = data->cluster_count;
-	int l;
-	
-	for(int i = 0 ; i < cluster_count - 3; i++){
-		int location_in_path = 0;
-			
-		for(int k = 0; k < i; k++)
-			location_in_path = tour[location_in_path].next;
-			
-		int current_vertex = tour[location_in_path].vertex;
-		
-		
-		for(int k = 3; k < cluster_count - i - 2; k++){
-			int first_next_location = tour[location_in_path].next;
-			int first_next_vertex = tour[tour[location_in_path].next].vertex;
-			int next_location = tour[location_in_path].next;
-			for(l = 0; l < k; l++){
-				next_location = tour[next_location].next;
-			}
-			int next_vertex = tour[next_location].vertex;
-			int next_next_location = tour[next_location].next;
-			
-			int next_next_vertex = tour[next_next_location].vertex;
-			
-			if(next_next_vertex == current_vertex) break;
-			
-			int cost1 = data->dist_matrix[current_vertex][first_next_vertex] +
-			 data->dist_matrix[next_vertex][next_next_vertex];
-			int cost2 = data->dist_matrix[current_vertex][next_vertex] +
-			 data->dist_matrix[first_next_vertex][next_next_vertex];
-			
-			if(cost2 < cost1)
-			{
-				int tmp_location = next_location;				
-				for(int m =0 ; m < l + 1; m++)
-				{	
-					int tmp_vertex = tour[tmp_location].next;
-					tour[tmp_location].next = tour[tmp_location].prev; 
-					tour[tmp_location].prev = tmp_vertex;
-					tmp_location = tour[tmp_location].next;		
-				}
 
-				tour[location_in_path].next = next_location;
-				tour[next_location].prev = location_in_path;
+    int cluster_count = data->cluster_count;
+    int l;
 
-				tour[first_next_location].next = next_next_location;
-				
-				tour[next_next_location].prev = first_next_location;
-		
-			}
-		}
-	}
-	return 0;
+    for (int i = 0; i < cluster_count - 3; i++)
+    {
+        int location_in_path = 0;
+
+        for (int k = 0; k < i; k++)
+            location_in_path = tour[location_in_path].next;
+
+        int current_vertex = tour[location_in_path].vertex;
+
+        for (int k = 3; k < cluster_count - i - 2; k++)
+        {
+            int first_next_location = tour[location_in_path].next;
+            int first_next_vertex = tour[tour[location_in_path].next].vertex;
+            int next_location = tour[location_in_path].next;
+            for (l = 0; l < k; l++)
+            {
+                next_location = tour[next_location].next;
+            }
+            int next_vertex = tour[next_location].vertex;
+            int next_next_location = tour[next_location].next;
+
+            int next_next_vertex = tour[next_next_location].vertex;
+
+            if (next_next_vertex == current_vertex) break;
+
+            int cost1 = data->dist_matrix[current_vertex][first_next_vertex] +
+                    data->dist_matrix[next_vertex][next_next_vertex];
+            int cost2 = data->dist_matrix[current_vertex][next_vertex] +
+                    data->dist_matrix[first_next_vertex][next_next_vertex];
+
+            if (cost2 < cost1)
+            {
+                int tmp_location = next_location;
+                for (int m = 0; m < l + 1; m++)
+                {
+                    int tmp_vertex = tour[tmp_location].next;
+                    tour[tmp_location].next = tour[tmp_location].prev;
+                    tour[tmp_location].prev = tmp_vertex;
+                    tmp_location = tour[tmp_location].next;
+                }
+
+                tour[location_in_path].next = next_location;
+                tour[next_location].prev = location_in_path;
+
+                tour[first_next_location].next = next_next_location;
+
+                tour[next_next_location].prev = first_next_location;
+
+            }
+        }
+    }
+    return 0;
 }
 
 int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x)
 {
-	
+
     int rval = 0;
     int *cluster_mark = 0;
 
@@ -1228,7 +951,7 @@ int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x)
     struct Graph *graph = data->graph;
     const int node_count = graph->node_count;
     const int edge_count = graph->edge_count;
-  
+
     cluster_mark = (int *) malloc(data->cluster_count * sizeof(int));
     abort_if(!cluster_mark, "could not allocate cluster_mark");
 
@@ -1240,10 +963,10 @@ int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x)
 
     for (int i = 0; i < data->cluster_count; i++)
         cluster_mark[i] = 0;
-	
+
     int initial;
     for (initial = 0; initial < edge_count; initial++)
-        if (x[initial] > 1.0 - LP_EPSILON) break;
+        if (x[initial] > 1.0 - EPSILON) break;
 
     initial = graph->edges[initial].from->index;
 
@@ -1251,10 +974,10 @@ int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x)
 
     stack[stack_top++] = &graph->nodes[initial];
     graph->nodes[initial].mark = 1;
-    
-	tour[0].vertex = graph->nodes[initial].index;
-	int next_vertex = 1;
-	
+
+    tour[0].vertex = graph->nodes[initial].index;
+    int next_vertex = 1;
+
     while (stack_top > 0)
     {
         struct Node *n = stack[--stack_top];
@@ -1266,30 +989,36 @@ int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x)
             struct Node *neighbor = adj->neighbor;
 
             if (neighbor->mark) continue;
-            if (x[adj->edge->index] < LP_EPSILON) continue;
+            if (x[adj->edge->index] < EPSILON) continue;
 
             stack[stack_top++] = neighbor;
             tour[next_vertex].vertex = neighbor->index;
-			next_vertex++;
+            next_vertex++;
             neighbor->mark = 1;
-            
+
         }
     }
-   
-    
-	for(int i =0; i < data->cluster_count; i++){
-		if(i == 0){
-			tour[i].prev = data->cluster_count - 1;
-		}else{
-			tour[i].prev = i-1;
-		}
-		if(i == data->cluster_count - 1){
-			tour[i].next = 0;
-		}else{
-			tour[i].next = i+1;
-		}	
-	}
-	 
+
+    for (int i = 0; i < data->cluster_count; i++)
+    {
+        if (i == 0)
+        {
+            tour[i].prev = data->cluster_count - 1;
+        }
+        else
+        {
+            tour[i].prev = i - 1;
+        }
+        if (i == data->cluster_count - 1)
+        {
+            tour[i].next = 0;
+        }
+        else
+        {
+            tour[i].next = i + 1;
+        }
+    }
+
     CLEANUP:
     if (stack) free(stack);
     if (cluster_mark) free(cluster_mark);

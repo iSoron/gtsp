@@ -47,9 +47,6 @@ struct Graph
     struct Adjacency *adj;
 };
 
-void graph_dfs(
-        int n, struct Graph *G, double *x, int *icount, int *island);
-
 void graph_init(struct Graph *graph);
 
 void graph_free(struct Graph *graph);
@@ -60,15 +57,6 @@ int graph_build(
         int *edges,
         int is_directed,
         struct Graph *graph);
-
-void get_delta(
-        int nsize,
-        int *nlist,
-        int ecount,
-        int *elist,
-        int *deltacount,
-        int *delta,
-        int *marks);
 
 int get_cut_edges_from_marks(
         struct Graph *graph, int *cut_edges_count, struct Edge **cut_edges);

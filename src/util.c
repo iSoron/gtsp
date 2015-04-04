@@ -5,7 +5,7 @@
 #include "util.h"
 #include "main.h"
 
-double get_current_time()
+double get_user_time()
 {
     struct rusage ru;
 
@@ -23,9 +23,9 @@ double get_real_time()
 void time_printf(const char *fmt, ...)
 {
     if (INITIAL_TIME == 0)
-        INITIAL_TIME = get_current_time();
+        INITIAL_TIME = get_user_time();
 
-    printf("[%10.2lf] ", get_current_time() - INITIAL_TIME);
+    printf("[%10.2lf] ", get_user_time() - INITIAL_TIME);
 
     va_list args;
     va_start(args, fmt);

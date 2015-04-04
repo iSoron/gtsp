@@ -2,7 +2,7 @@
 #include "util.h"
 #include <assert.h>
 
-int add_comb_cut(
+static int add_comb_cut(
         struct LP *lp,
         struct Graph *graph,
         int current_component,
@@ -73,7 +73,7 @@ int add_comb_cut(
     {
         for (int i = 0; i < nz; i++)
         {
-            if (OPTIMAL_X[rmatind[i]] < LP_EPSILON) continue;
+            if (OPTIMAL_X[rmatind[i]] < EPSILON) continue;
 
             if (rmatind[i] >= node_count)
             {
@@ -98,7 +98,7 @@ int add_comb_cut(
         for (int i = 0; i < nz; i++)
             sum += rmatval[i] * OPTIMAL_X[rmatind[i]];
         log_verbose("%.2lf >= %.2lf\n", sum, rhs);
-        abort_if(sum <= rhs - LP_EPSILON, "cannot add invalid cut");
+        abort_if(sum <= rhs - EPSILON, "cannot add invalid cut");
     }
 
     double lhs = 0.0;
@@ -107,7 +107,7 @@ int add_comb_cut(
 
     log_verbose("Violation: %.4lf >= %.4lf\n", lhs, rhs);
 
-    if (lhs + LP_EPSILON > rhs)
+    if (lhs + EPSILON > rhs)
     {
         free(rmatind);
         free(rmatval);
@@ -130,7 +130,7 @@ int add_comb_cut(
     return rval;
 }
 
-int find_components(
+static int find_components(
         struct Graph *graph, double *x, int *components, int *component_sizes)
 {
     int rval = 0;
@@ -168,8 +168,8 @@ int find_components(
                 if (neighbor->mark) continue;
 
                 double x_e = x[adj->edge->index];
-                if (x_e < LP_EPSILON) continue;
-                if (x_e > 1 - LP_EPSILON) continue;
+                if (x_e < EPSILON) continue;
+                if (x_e > 1 - EPSILON) continue;
 
                 stack[stack_top++] = neighbor;
                 neighbor->mark = 1;
@@ -196,7 +196,7 @@ int find_components(
     return rval;
 }
 
-int find_teeth(
+static int find_teeth(
         struct Graph *graph,
         double *x,
         int current_component,
@@ -221,7 +221,7 @@ int find_teeth(
         struct Node *from = e->from;
         struct Node *to = e->to;
 
-        if (x[e->index] < 1 - LP_EPSILON) continue;
+        if (x[e->index] < 1 - EPSILON) continue;
 
         if (to->mark || from->mark) continue;
 
@@ -241,11 +241,6 @@ int find_teeth(
 
     return 0;
 }
-
-int write_shrunken_graph(
-        double *shrunken_x,
-        struct Graph *shrunken_graph,
-        int const cluster_count);
 
 static int shrink_clusters(
         const struct GTSP *data,
@@ -346,10 +341,53 @@ static int shrink_clusters(
     return rval;
 }
 
-int find_comb_cuts(struct LP *lp, struct GTSP *data)
+static int write_shrunken_graph(
+        double *shrunken_x,
+        struct Graph *shrunken_graph,
+        int const cluster_count)
 {
     int rval = 0;
-    double initial_time = get_current_time();
+
+    FILE *file = 0;
+
+    file = fopen("gtsp-shrunken.in", "w");
+    abort_if(!file, "could not open file");
+
+    fprintf(file, "%d %d\n", (*shrunken_graph).node_count, cluster_count);
+    for (int i = 0; i < (*shrunken_graph).node_count; i++)
+        fprintf(file, "%.2lf %.2lf %d\n", (*shrunken_graph).x_coordinates[i],
+                (*shrunken_graph).y_coordinates[i], i);
+
+    fclose(file);
+
+    file = fopen("gtsp-shrunken.out", "w");
+    abort_if(!file, "could not open file");
+
+    int positive_edge_count = 0;
+    for (int i = 0; i < (*shrunken_graph).edge_count; i++)
+        if (shrunken_x[i] > EPSILON)
+            positive_edge_count++;
+
+    fprintf(file, "%d %d\n", (*shrunken_graph).node_count,
+            (*shrunken_graph).edge_count);
+
+    fprintf(file, "%d\n", positive_edge_count);
+
+    for (int i = 0; i < (*shrunken_graph).edge_count; i++)
+        if (shrunken_x[i] > EPSILON)
+            fprintf(file, "%d %d %.4lf\n",
+                    (*shrunken_graph).edges[i].from->index,
+                    (*shrunken_graph).edges[i].to->index, shrunken_x[i]);
+    fclose(file);
+
+    CLEANUP:
+    return rval;
+}
+
+int GTSP_find_comb_cuts(struct LP *lp, struct GTSP *data)
+{
+    int rval = 0;
+    double initial_time = get_user_time();
 
     double *x = 0;
     double *shrunken_x = 0;
@@ -380,6 +418,8 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
 #if LOG_LEVEL >= LOG_LEVEL_DEBUG
     rval = write_shrunken_graph(shrunken_x, &shrunken_graph, cluster_count);
     abort_if(rval, "write_shrunken_graph failed");
+#else
+    UNUSED(write_shrunken_graph);
 #endif
 
     teeth = (int *) malloc(cluster_count * sizeof(int));
@@ -414,8 +454,8 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
 
         if (tooth_count % 2 == 0)
         {
-            for (int i = 0; i < cluster_count; i++)
-                if (teeth[i] == tooth_count - 1) teeth[i] = -1;
+            for (int k = 0; k < cluster_count; k++)
+                if (teeth[k] == tooth_count - 1) teeth[k] = -1;
 
             tooth_count--;
         }
@@ -428,7 +468,7 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
     int added_cuts_count = lp->cut_pool_size - original_cut_pool_size;
     log_debug("    %d combs\n", added_cuts_count);
 
-    COMBS_TIME += get_current_time() - initial_time;
+    COMBS_TIME += get_user_time() - initial_time;
     COMBS_COUNT += added_cuts_count;
 
     CLEANUP:
@@ -438,50 +478,5 @@ int find_comb_cuts(struct LP *lp, struct GTSP *data)
     if (component_sizes) free(component_sizes);
     if (shrunken_x) free(shrunken_x);
     if (x) free(x);
-    return rval;
-}
-
-int write_shrunken_graph(
-        double *shrunken_x,
-        struct Graph *shrunken_graph,
-        int const cluster_count)
-{
-    int rval = 0;
-
-    FILE *file = 0;
-
-    file = fopen("gtsp-shrunken.in", "w");
-    abort_if(!file, "could not open file");
-
-    fprintf(file, "%d %d\n", (*shrunken_graph).node_count, cluster_count);
-    for (int i = 0; i < (*shrunken_graph).node_count; i++)
-    {
-        fprintf(file, "%.2lf %.2lf %d\n", (*shrunken_graph).x_coordinates[i],
-                (*shrunken_graph).y_coordinates[i], i);
-    }
-
-    fclose(file);
-
-    file = fopen("gtsp-shrunken.out", "w");
-    abort_if(!file, "could not open file");
-
-    int positive_edge_count = 0;
-    for (int i = 0; i < (*shrunken_graph).edge_count; i++)
-        if (shrunken_x[i] > LP_EPSILON)
-            positive_edge_count++;
-
-    fprintf(file, "%d %d\n", (*shrunken_graph).node_count,
-            (*shrunken_graph).edge_count);
-
-    fprintf(file, "%d\n", positive_edge_count);
-
-    for (int i = 0; i < (*shrunken_graph).edge_count; i++)
-        if (shrunken_x[i] > LP_EPSILON)
-            fprintf(file, "%d %d %.4lf\n",
-                    (*shrunken_graph).edges[i].from->index,
-                    (*shrunken_graph).edges[i].to->index, shrunken_x[i]);
-    fclose(file);
-
-    CLEANUP:
     return rval;
 }
