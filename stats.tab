@@ -1,5 +1,0 @@
-instance              time      subt-t    combs-t   pool-t    pool-m    lp-count  lp-time   lp-rows   lp-cols   init-v    opt-v     root-v    nodes     subt-cc   subt-nc   subt-nn   combs     
-gtsp-m20-n100-s155    0.48      0.00      0.00      0.13      11        9         0.26      760       4785      272       272       272       1         664       0         0         0         
-gtsp-m10-n100-s181    0.27      0.00      0.00      0.04      4         12        0.19      392       4320      179       178       178       1         319       0         0         0         
-gtsp-m100-n100-s183   0.91      0.28      0.00      0.03      3         7         0.04      415       5050      824       745       745       1         211       0         0         4         
-gtsp-m50-n100-s193    3.85      0.48      0.00      1.37      18        29        0.84      1207      4958      561       538       536       11        1723      0         0         7         
