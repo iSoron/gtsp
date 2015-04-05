@@ -21,11 +21,11 @@
 #include "main.h"
 #include "gtsp.h"
 #include "util.h"
-
-unsigned int SEED = 0;
+#include "gtsp-heur.h"
 
 double SUBTOUR_TIME = 0;
 double COMBS_TIME = 0;
+double COLUMNS_TIME = 0;
 
 double CUT_POOL_TIME = 0;
 long CUT_POOL_MAX_MEMORY = 0;
@@ -52,19 +52,24 @@ char FRAC_SOLUTION_FILENAME[100] = {0};
 char WRITE_GRAPH_FILENAME[100] = {0};
 char STATS_FILENAME[100] = {0};
 
+double *OPTIMAL_X = 0;
+unsigned int SEED = 0;
+
 static int input_node_count = -1;
 static int input_cluster_count = -1;
 static int grid_size = 100;
 
-static const struct option options_tab[] = {{"help", no_argument, 0, 'h'},
-        {"nodes", required_argument, 0, 'n'},
-        {"clusters", required_argument, 0, 'm'},
-        {"grid-size", required_argument, 0, 'g'},
-        {"optimal", required_argument, 0, 'x'},
-        {"seed", required_argument, 0, 's'}, {"out", required_argument, 0, 'o'},
-        {"stats", required_argument, 0, 't'}, {"lp", required_argument, 0, 'l'},
-        {"write-graph", required_argument, 0, 'w'},
-        {(char *) 0, (int) 0, (int *) 0, (int) 0}};
+static const struct option options_tab[] = {{"help",        no_argument,       0,         'h'},
+                                            {"nodes",       required_argument, 0,         'n'},
+                                            {"clusters",    required_argument, 0,         'm'},
+                                            {"grid-size",   required_argument, 0,         'g'},
+                                            {"optimal",     required_argument, 0,         'x'},
+                                            {"seed",        required_argument, 0,         's'},
+                                            {"out",         required_argument, 0,         'o'},
+                                            {"stats",       required_argument, 0,         't'},
+                                            {"lp",          required_argument, 0,         'l'},
+                                            {"write-graph", required_argument, 0,         'w'},
+                                            {(char *) 0, (int) 0,              (int *) 0, (int) 0}};
 
 static char input_x_filename[1000] = {0};
 
@@ -103,7 +108,7 @@ static int parse_args(int argc, char **argv)
     {
         int c = 0;
         int option_index = 0;
-        c = getopt_long(argc, argv, "n:m:g:x:s:h:o:t:l:w:", options_tab,
+        c = getopt_long(argc, argv, "n:m:g:x:s:h:o:t:l:w:f:", options_tab,
                 &option_index);
 
         if (c < 0) break;
@@ -144,6 +149,10 @@ static int parse_args(int argc, char **argv)
 
             case 'w':
                 strcpy(WRITE_GRAPH_FILENAME, optarg);
+                break;
+
+            case 'f':
+                strcpy(FRAC_SOLUTION_FILENAME, optarg);
                 break;
 
             case 'h':
@@ -235,11 +244,10 @@ int main(int argc, char **argv)
 
     int init_val = 0;
 
-    initial_x = (double *) malloc(
-            (data.graph->node_count + data.graph->edge_count) * sizeof(double));
+    initial_x = (double *) malloc((data.graph->edge_count) * sizeof(double));
     abort_if(!initial_x, "could not allocate initial_x");
 
-    rval = inital_tour_value(&data, &init_val, initial_x);
+    rval = GTSP_find_initial_tour(&data, &init_val, initial_x);
     abort_if(rval, "initial_tour_value failed");
 
     rval = GTSP_solution_found(&bnc, &data, initial_x);
@@ -289,7 +297,7 @@ int main(int argc, char **argv)
 
     log_info("Starting branch-and-cut solver...\n");
     rval = BNC_solve(&bnc);
-    abort_if(rval, "BNC_solve_node failed");
+    abort_if(rval, "solve_node failed");
 
     abort_if(!bnc.best_x, "problem has no feasible solution");
 
@@ -317,6 +325,7 @@ int main(int argc, char **argv)
             fprintf(file, "%-8s  ", "time");
             fprintf(file, "%-8s  ", "subt-t");
             fprintf(file, "%-8s  ", "combs-t");
+            fprintf(file, "%-8s  ", "cols-t");
             fprintf(file, "%-8s  ", "pool-t");
             fprintf(file, "%-8s  ", "pool-m");
             fprintf(file, "%-8s  ", "lp-count");
@@ -337,6 +346,7 @@ int main(int argc, char **argv)
         fprintf(file, "%-8.2lf  ", TOTAL_TIME);
         fprintf(file, "%-8.2lf  ", SUBTOUR_TIME);
         fprintf(file, "%-8.2lf  ", COMBS_TIME);
+        fprintf(file, "%-8.2lf  ", COLUMNS_TIME);
         fprintf(file, "%-8.2lf  ", CUT_POOL_TIME);
         fprintf(file, "%-8ld  ", CUT_POOL_MAX_MEMORY / 1024 / 1024);
         fprintf(file, "%-8d  ", LP_SOLVE_COUNT);
@@ -353,7 +363,7 @@ int main(int argc, char **argv)
         fclose(file);
     }
 
-    if(strlen(SOLUTION_FILENAME) == 0)
+    if (strlen(SOLUTION_FILENAME) == 0)
     {
         log_info("Optimal solution:\n");
         rval = GTSP_print_solution(&data, bnc.best_x);
@@ -362,7 +372,6 @@ int main(int argc, char **argv)
 
     log_info("Optimal solution value:\n");
     log_info("    %.4lf\n", bnc.best_obj_val);
-
 
     CLEANUP:
     if (OPTIMAL_X) free(OPTIMAL_X);

@@ -100,9 +100,9 @@ else:
             c = white.blend(red, 0.1 + 0.9 * edges[k][2])
         plot = plot + line([all_points[edges[k][0]], all_points[edges[k][1]]], color=c)
 
-    print ('Drawing labels...')
-    for i in range(node_count):
-        plot = plot + text(str(i), all_points[i] + text_offset, color='gray')
+    #print ('Drawing labels...')
+    #for i in range(node_count):
+    #    plot = plot + text(str(i), all_points[i] + text_offset, color='gray')
 
     print ('Drawing clusters...')
     for i in range(cluster_count):

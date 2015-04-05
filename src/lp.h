@@ -40,6 +40,10 @@ struct Row
     double rhs;
     double *rmatval;
     int *rmatind;
+
+    int edge_count;
+    double edge_val;
+    char *edges;
 };
 
 static const int MAX_NAME_LENGTH = 100;
@@ -83,7 +87,11 @@ int LP_get_obj_val(struct LP *lp, double *obj);
 
 int LP_get_x(struct LP *lp, double *x);
 
+int LP_get_y(struct LP *lp, double *y);
+
 int LP_get_num_cols(struct LP *lp);
+
+int LP_get_num_rows(struct LP *lp);
 
 int LP_add_cut(struct LP *lp, struct Row *cut);
 

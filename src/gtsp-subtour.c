@@ -19,7 +19,8 @@
 #include "util.h"
 #include "flow.h"
 
-static void deactivate_cluster_node(double *capacities, struct Node *cluster_node)
+static void deactivate_cluster_node(
+        double *capacities, struct Node *cluster_node)
 {
     for (int i = 0; i < cluster_node->degree; i++)
     {
@@ -63,7 +64,10 @@ static int build_flow_digraph(
     int kc = 0;
     for (int i = 0; i < graph->edge_count; i++)
     {
-        if (x[i] < EPSILON) continue;
+        int col = graph->edges[i].column;
+
+        if (col < 0) continue;
+        if (x[col] < EPSILON) continue;
 
         struct Edge *e = &graph->edges[i];
         int from = e->from->index;
@@ -71,7 +75,7 @@ static int build_flow_digraph(
 
         digraph_edges[ke++] = from;
         digraph_edges[ke++] = to;
-        capacities[kc++] = x[i];
+        capacities[kc++] = x[col];
 
         digraph_edges[ke++] = to;
         digraph_edges[ke++] = from;
@@ -79,7 +83,7 @@ static int build_flow_digraph(
 
         digraph_edges[ke++] = to;
         digraph_edges[ke++] = from;
-        capacities[kc++] = x[i];
+        capacities[kc++] = x[col];
 
         digraph_edges[ke++] = from;
         digraph_edges[ke++] = to;
@@ -122,51 +126,68 @@ static int build_flow_digraph(
 }
 
 static int add_subtour_cut(
-        struct LP *lp, struct Edge **cut_edges, int cut_edges_count)
+        struct LP *lp,
+        struct Edge **cut_edges,
+        int cut_edges_count,
+        struct Graph *graph)
 {
     int rval = 0;
 
     char sense = 'G';
     double rhs = 2.0;
-    int newnz = cut_edges_count;
+    int nz = cut_edges_count;
 
     int *rmatind = 0;
     double *rmatval = 0;
+    struct Row *cut = 0;
 
-    rmatind = (int *) malloc(newnz * sizeof(int));
+    rmatind = (int *) malloc(nz * sizeof(int));
     abort_if(!rmatind, "could not allocate rmatind");
 
-    rmatval = (double *) malloc(newnz * sizeof(double));
+    rmatval = (double *) malloc(nz * sizeof(double));
     abort_if(!rmatval, "could not allocate rmatval");
 
+    nz = 0;
     for (int i = 0; i < cut_edges_count; i++)
     {
-        rmatind[i] = cut_edges[i]->index;
-        rmatval[i] = 1.0;
+        if (cut_edges[i]->column < 0) continue;
+        rmatind[nz] = cut_edges[i]->column;
+        rmatval[nz] = 1.0;
+        nz++;
     }
 
     log_verbose("Generated cut:\n");
-    for (int i = 0; i < newnz; i++)
+    for (int i = 0; i < nz; i++)
             log_verbose("    %8.2f x%d\n", rmatval[i], rmatind[i]);
     log_verbose("    %c %.2lf\n", sense, rhs);
 
     if (OPTIMAL_X)
     {
         double sum = 0;
-        for (int i = 0; i < newnz; i++)
+        for (int i = 0; i < nz; i++)
             sum += rmatval[i] * OPTIMAL_X[rmatind[i]];
         abort_if(sum <= rhs - EPSILON, "cannot add invalid cut");
     }
 
-    struct Row *cut = 0;
     cut = (struct Row *) malloc(sizeof(struct Row));
     abort_if(!cut, "could not allocate cut");
 
-    cut->nz = newnz;
+    cut->edges = (char *) malloc(graph->edge_count * sizeof(char));
+    abort_if(!cut->edges, "could not allocate cut->edges");
+
+    for (int i = 0; i < graph->edge_count; i++)
+        cut->edges[i] = 0;
+
+    for (int i = 0; i < cut_edges_count; i++)
+        cut->edges[cut_edges[i]->index] = 1;
+
+    cut->nz = nz;
     cut->sense = sense;
     cut->rhs = rhs;
     cut->rmatval = rmatval;
     cut->rmatind = rmatind;
+    cut->edge_count = graph->edge_count;
+    cut->edge_val = 1.0;
 
     rval = LP_add_cut(lp, cut);
     abort_if(rval, "LP_add_cut failed");
@@ -203,7 +224,7 @@ int GTSP_find_exact_subtour_cuts(struct LP *lp, struct GTSP *data)
     abort_if(rval, "LP_get_x failed");
 
 #if LOG_LEVEL >= LOG_LEVEL_DEBUG
-    if(strlen(FRAC_SOLUTION_FILENAME) > 0)
+    if (strlen(FRAC_SOLUTION_FILENAME) > 0)
     {
         rval = GTSP_write_solution(data, FRAC_SOLUTION_FILENAME, x);
         abort_if(rval, "GTSP_write_solution failed");
@@ -268,7 +289,7 @@ int GTSP_find_exact_subtour_cuts(struct LP *lp, struct GTSP *data)
                     log_verbose("  %d %d (%d)\n", cut_edges[k]->from->index,
                             cut_edges[k]->to->index, cut_edges[k]->index);
 
-            rval = add_subtour_cut(lp, cut_edges, cut_edges_count);
+            rval = add_subtour_cut(lp, cut_edges, cut_edges_count, graph);
             abort_if(rval, "add_subtour_cut failed");
 
             cuts_count++;

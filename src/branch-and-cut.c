@@ -22,13 +22,13 @@
 #include "util.h"
 #include "gtsp.h"
 
-static int BNC_solve_node(struct BNC *bnc, int depth);
+static int solve_node(struct BNC *bnc, int depth);
 
-static int BNC_branch_node(struct BNC *bnc, double *x, int depth);
+static int branch_node(struct BNC *bnc, double *x, int depth);
 
-static int BNC_is_integral(double *x, int num_cols);
+static int is_integral(double *x, int num_cols);
 
-static int BNC_find_best_branching_var(double *x, int num_cols);
+static int find_best_branching_var(double *x, int num_cols);
 
 int BNC_init(struct BNC *bnc)
 {
@@ -86,10 +86,10 @@ int BNC_init_lp(struct BNC *bnc)
 
 int BNC_solve(struct BNC *bnc)
 {
-    return BNC_solve_node(bnc, 1);
+    return solve_node(bnc, 1);
 }
 
-static int BNC_solve_node(struct BNC *bnc, int depth)
+static int solve_node(struct BNC *bnc, int depth)
 {
     struct LP *lp = bnc->lp;
     double *best_val = &bnc->best_obj_val;
@@ -151,11 +151,17 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
             goto CLEANUP;
         }
 
+        free(x);
+        num_cols = LP_get_num_cols(lp);
+
+        x = (double *) malloc(num_cols * sizeof(double));
+        abort_if(!x, "could not allocate x");
+
         rval = LP_get_x(lp, x);
         abort_if(rval, "LP_get_x failed");
     }
 
-    if (BNC_is_integral(x, num_cols))
+    if (is_integral(x, num_cols))
     {
         log_debug("Solution is integral\n");
 
@@ -179,8 +185,8 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     else
     {
         log_debug("Solution is fractional\n");
-        rval = BNC_branch_node(bnc, x, depth);
-        abort_if(rval, "BNC_branch_node failed");
+        rval = branch_node(bnc, x, depth);
+        abort_if(rval, "branch_node failed");
     }
 
     CLEANUP:
@@ -188,14 +194,14 @@ static int BNC_solve_node(struct BNC *bnc, int depth)
     return rval;
 }
 
-static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
+static int branch_node(struct BNC *bnc, double *x, int depth)
 {
     int rval = 0;
 
     struct LP *lp = bnc->lp;
 
     int num_cols = LP_get_num_cols(lp);
-    int best_branch_var = BNC_find_best_branching_var(x, num_cols);
+    int best_branch_var = find_best_branching_var(x, num_cols);
 
     log_debug("Branching on variable x%d = %.6lf (depth %d)...\n",
               best_branch_var, x[best_branch_var], depth);
@@ -204,8 +210,8 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
     rval = LP_change_bound(lp, best_branch_var, 'L', 1.0);
     abort_if(rval, "LP_change_bound failed");
 
-    rval = BNC_solve_node(bnc, depth + 1);
-    abort_if(rval, "BNC_solve_node failed");
+    rval = solve_node(bnc, depth + 1);
+    abort_if(rval, "solve_node failed");
 
     rval = LP_change_bound(lp, best_branch_var, 'L', 0.0);
     abort_if(rval, "LP_change_bound failed");
@@ -214,8 +220,8 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
     rval = LP_change_bound(lp, best_branch_var, 'U', 0.0);
     abort_if(rval, "LP_change_bound failed");
 
-    rval = BNC_solve_node(bnc, depth + 1);
-    abort_if(rval, "BNC_solve_node failed");
+    rval = solve_node(bnc, depth + 1);
+    abort_if(rval, "solve_node failed");
 
     rval = LP_change_bound(lp, best_branch_var, 'U', 1.0);
     abort_if(rval, "LP_change_bound failed");
@@ -226,7 +232,7 @@ static int BNC_branch_node(struct BNC *bnc, double *x, int depth)
     return rval;
 }
 
-static int BNC_is_integral(double *x, int num_cols)
+static int is_integral(double *x, int num_cols)
 {
     for (int i = 0; i < num_cols; i++)
         if (x[i] > EPSILON && x[i] < 1.0 - EPSILON)
@@ -235,7 +241,7 @@ static int BNC_is_integral(double *x, int num_cols)
     return 1;
 }
 
-static int BNC_find_best_branching_var(double *x, int num_cols)
+static int find_best_branching_var(double *x, int num_cols)
 {
     int best_index = 0;
     double best_index_frac = 1.0;

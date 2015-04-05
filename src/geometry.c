@@ -21,8 +21,6 @@
 #include "geometry.h"
 #include "util.h"
 
-/* function for creating a random set of points in unit square */
-
 int generate_random_points_2d(
         int node_count,
         int grid_size,
@@ -110,8 +108,8 @@ int generate_random_clusters_2d(
 
         for (int j = 0; j < cluster_count; j++)
         {
-            int distance =
-                    get_euclidean_distance(x_coordinates, y_coordinates, i, j);
+            int distance = get_euclidean_distance(x_coordinates, y_coordinates,
+                    i, j);
 
             if (distance < closest_distance)
             {
@@ -128,18 +126,21 @@ int generate_random_clusters_2d(
 }
 
 int generate_dist_matrix(
-		int node_count,
+        int node_count,
         double *x_coordinates,
-        double *y_coordinates, int** dist_matrix)
+        double *y_coordinates,
+        int **dist_matrix)
 {
-	int i,j;
-    for (i = 0; i < node_count; i++){
-		for (j = 0; j < node_count; j++){
-			dist_matrix[i][j] = 
-				get_euclidean_distance(x_coordinates, y_coordinates, i, j);
-		}
-	}
-	return 0;
+    int i, j;
+    for (i = 0; i < node_count; i++)
+    {
+        for (j = 0; j < node_count; j++)
+        {
+            dist_matrix[i][j] = get_euclidean_distance(x_coordinates,
+                    y_coordinates, i, j);
+        }
+    }
+    return 0;
 }
 
 int get_euclidean_distance(

@@ -37,12 +37,30 @@ struct Node
 
 struct Edge
 {
+    /*
+     * Index of the edge. Each edge is numbered from 0 to graph->edge_count.
+     */
     int index;
+
+    /*
+     * Weight of the edge.
+     */
     int weight;
+
+    /*
+     * If this edge corresponds to a column of the LP, this field contains
+     * the index of that column. Otherwise, this field contains a negative
+     * value.
+     */
+    int column;
 
     struct Node *from;
     struct Node *to;
 
+    /*
+     * Pointer to an edge that points in the opposite direction of this one.
+     * Used by flow algorithms.
+     */
     struct Edge *reverse;
 };
 
@@ -71,9 +89,11 @@ int graph_build(
         int is_directed,
         struct Graph *graph);
 
+/*
+ * Returns the list of edges e=uv such that either u or v (but not both) are
+ * marked nodes.
+ */
 int get_cut_edges_from_marks(
         struct Graph *graph, int *cut_edges_count, struct Edge **cut_edges);
-
-int graph_dump(const struct Graph *graph);
 
 #endif

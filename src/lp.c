@@ -21,18 +21,19 @@
 #include <assert.h>
 #include "lp.h"
 #include "util.h"
-#include "main.h"
+#include "gtsp-subtour.h"
 
 static int compress_cut_pool(struct LP *lp)
 {
     int delete_count = 0;
     for (int i = 0; i < lp->cut_pool_size; i++)
     {
-        if (lp->cut_pool[i]->cplex_row_index < 0)
+        struct Row *cut = lp->cut_pool[i];
+
+        if (cut->cplex_row_index < 0)
         {
-            free(lp->cut_pool[i]->rmatind);
-            free(lp->cut_pool[i]->rmatval);
-            free(lp->cut_pool[i]);
+            free(cut->edges);
+            free(cut);
             delete_count++;
         }
         else
@@ -87,8 +88,10 @@ static int remove_old_cuts(struct LP *lp)
         {
             struct Row *cut = lp->cut_pool[j];
 
-            if (cut->cplex_row_index == i - count) cut->cplex_row_index = -1;
-            else if (cut->cplex_row_index > i - count) cut->cplex_row_index--;
+            if (cut->cplex_row_index == i - count)
+                cut->cplex_row_index = -1;
+            else if (cut->cplex_row_index > i - count)
+                cut->cplex_row_index--;
         }
 
         count++;
@@ -132,20 +135,23 @@ static int remove_old_cuts(struct LP *lp)
     log_debug("Compressing cut pool...\n");
     compress_cut_pool(lp);
 
-
     long nz = 0;
     long size = 0;
     for (int i = 0; i < lp->cut_pool_size; i++)
     {
         size += sizeof(struct Row);
-        nz += lp->cut_pool[i]->nz;
-        size += lp->cut_pool[i]->nz * sizeof(double);
-        size += lp->cut_pool[i]->nz * sizeof(int);
+        struct Row *cut = lp->cut_pool[i];
+
+        nz += cut->nz;
+        size += cut->nz * sizeof(double);
+        size += cut->nz * sizeof(int);
+        size += cut->edge_count * sizeof(char);
     }
 
-    log_debug("    %ld cuts (%ld nz, %ld MiB)\n", lp->cut_pool_size, nz, size/1024/1024);
+    log_debug("    %ld cuts (%ld nz, %ld MiB)\n", lp->cut_pool_size, nz,
+            size / 1024 / 1024);
 
-    if(size > CUT_POOL_MAX_MEMORY)
+    if (size > CUT_POOL_MAX_MEMORY)
         CUT_POOL_MAX_MEMORY = size;
 
     CLEANUP:
@@ -167,7 +173,6 @@ static int update_cut_ages(struct LP *lp)
     rval = CPXgetslack(lp->cplex_env, lp->cplex_lp, slacks, 0, numrows - 1);
     abort_if(rval, "CPXgetslack failed");
 
-    int count = 0;
     for (int i = 0; i < lp->cut_pool_size; i++)
     {
         struct Row *cut = lp->cut_pool[i];
@@ -178,8 +183,6 @@ static int update_cut_ages(struct LP *lp)
             cut->age++;
         else
             cut->age = 0;
-
-        if (cut->age > 5) count++;
     }
 
     CLEANUP:
@@ -208,9 +211,9 @@ void LP_free_cut_pool(struct LP *lp)
 {
     for (int i = 0; i < lp->cut_pool_size; i++)
     {
-        free(lp->cut_pool[i]->rmatind);
-        free(lp->cut_pool[i]->rmatval);
-        free(lp->cut_pool[i]);
+        struct Row *cut = lp->cut_pool[i];
+        free(cut->edges);
+        free(cut);
     }
 
     if (lp->cut_pool) free(lp->cut_pool);
@@ -322,8 +325,8 @@ int LP_optimize(struct LP *lp, int *infeasible)
     int numrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
     int numcols = CPXgetnumcols(lp->cplex_env, lp->cplex_lp);
 
-    if(numrows > LP_MAX_ROWS) LP_MAX_ROWS = numrows;
-    if(numrows > LP_MAX_COLS) LP_MAX_COLS = numcols;
+    if (numrows > LP_MAX_ROWS) LP_MAX_ROWS = numrows;
+    if (numrows > LP_MAX_COLS) LP_MAX_COLS = numcols;
 
     log_debug("Optimizing LP (%d rows %d cols)...\n", numrows, numcols);
 
@@ -337,6 +340,8 @@ int LP_optimize(struct LP *lp, int *infeasible)
     solstat = CPXgetstat(lp->cplex_env, lp->cplex_lp);
     if (solstat == CPX_STAT_INFEASIBLE)
     {
+        log_debug("    infeasible\n");
+
         *infeasible = 1;
         goto CLEANUP;
     }
@@ -357,9 +362,12 @@ int LP_optimize(struct LP *lp, int *infeasible)
     rval = update_cut_ages(lp);
     abort_if(rval, "update_cut_ages failed");
 
-    log_debug("Removing old cuts...\n");
-    rval = remove_old_cuts(lp);
-    abort_if(rval, "LP_remove_old_cuts failed");
+    if (LP_SOLVE_COUNT % MAX_CUT_AGE == 0)
+    {
+        log_debug("Removing old cuts...\n");
+        rval = remove_old_cuts(lp);
+        abort_if(rval, "LP_remove_old_cuts failed");
+    }
 
     CUT_POOL_TIME += get_user_time() - initial_time;
 
@@ -392,9 +400,28 @@ int LP_get_x(struct LP *lp, double *x)
     return rval;
 }
 
+int LP_get_y(struct LP *lp, double *y)
+{
+    int rval = 0;
+
+    int nrows = CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
+    abort_if(!nrows, "No rows in LP");
+
+    rval = CPXgetpi(lp->cplex_env, lp->cplex_lp, y, 0, nrows - 1);
+    abort_iff(rval, "CPXgetpi failed (errno = %d)", rval);
+
+    CLEANUP:
+    return rval;
+}
+
 int LP_get_num_cols(struct LP *lp)
 {
     return CPXgetnumcols(lp->cplex_env, lp->cplex_lp);
+}
+
+int LP_get_num_rows(struct LP *lp)
+{
+    return CPXgetnumrows(lp->cplex_env, lp->cplex_lp);
 }
 
 int LP_write(struct LP *lp, const char *fname)
@@ -427,12 +454,10 @@ int LP_write(struct LP *lp, const char *fname)
 
 int compare_cuts(struct Row *cut1, struct Row *cut2)
 {
-    return_if_neq(cut1->nz, cut2->nz);
 
-    for (int i = 0; i < cut1->nz; i++)
+    for (int i = 0; i < cut1->edge_count; i++)
     {
-        return_if_neq(cut1->rmatind[i], cut2->rmatind[i]);
-        return_if_neq_epsilon(cut1->rmatval[i], cut2->rmatval[i]);
+        return_if_neq(cut1->edges[i], cut2->edges[i]);
     }
 
     return 0;
@@ -442,9 +467,9 @@ static int update_hash(struct Row *cut)
 {
     unsigned long hash = 0;
 
-    for (int i = 0; i < cut->nz; i++)
+    for (int i = 0; i < cut->edge_count; i++)
     {
-        hash += cut->rmatind[i] * 65521;
+        hash += cut->edges[i] * 65521;
         hash %= 4294967291;
     }
 
@@ -472,6 +497,7 @@ int LP_add_cut(struct LP *lp, struct Row *cut)
 
             free(cut->rmatval);
             free(cut->rmatind);
+            free(cut->edges);
             free(cut);
             return 0;
         }
@@ -487,6 +513,11 @@ int LP_add_cut(struct LP *lp, struct Row *cut)
 
     cut->cplex_row_index = CPXgetnumrows(lp->cplex_env, lp->cplex_lp) - 1;
     cut->age = 0;
+
+    free(cut->rmatval);
+    free(cut->rmatind);
+    cut->rmatind = 0;
+    cut->rmatval = 0;
 
     CUT_POOL_TIME += get_user_time() - initial_time;
     CLEANUP:

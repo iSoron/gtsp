@@ -31,25 +31,35 @@ struct Tour
 
 struct Cluster
 {
-	int size;
-	int* nodes;
+    /*
+     * Number of nodes inside the cluster.
+     */
+    int size;
+
+    /*
+     * List of nodes inside the cluster.
+     */
+    int *nodes;
 };
 
 struct GTSP
 {
     struct Graph *graph;
 
-    int** dist_matrix;
+    int **dist_matrix;
+
+    /*
+     * Mapping between a node and the cluster which contains it. If a node
+     * has index i and is contained in cluster k, then node_to_cluster[i] = k.
+     */
+    int *node_to_cluster;
 
     int cluster_count;
-    int *node_to_cluster;
     struct Cluster *clusters;
 };
 
 int GTSP_create_random_problem(
         int node_count, int cluster_count, int grid_size, struct GTSP *data);
-
-int inital_tour_value(struct GTSP *data, int *value, double *x);
 
 void GTSP_free(struct GTSP *data);
 
@@ -63,30 +73,15 @@ int GTSP_write_problem(struct GTSP *data, char *filename);
 
 int GTSP_write_solution(struct GTSP *data, char *filename, double *x);
 
-int optimize_vertex_in_cluster(struct Tour * tour, struct GTSP *data);
-
-int two_opt(struct Tour * tour, struct GTSP *data);
-
-int K_opt(struct Tour* tour, struct GTSP *data);
-
-int tour_length(int* tour, struct GTSP* data);
-
-void print_tour(int* tour, struct GTSP* data);
-
-int list_length(struct Tour * tour, struct GTSP* data);
-
-void print_list(struct Tour * tour, struct GTSP* data);
-
 int GTSP_print_solution(struct GTSP *data, double *x);
-
-
-
-int build_tour_from_x(struct GTSP *data, struct Tour *tour, double *x);
 
 int GTSP_solution_found(struct BNC *bnc, struct GTSP *data, double *x);
 
 int GTSP_check_solution(struct GTSP *data, double *x);
 
 int GTSP_read_solution(struct GTSP *gtsp, char *filename, double **p_x);
+
+int GTSP_build_edge_map(struct GTSP *gtsp, int *edge_map);
+
 
 #endif //_PROJECT_GTSP_H_

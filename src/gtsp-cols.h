@@ -14,17 +14,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _PROJECT_FLOW_H_
-#define _PROJECT_FLOW_H_
+#ifndef PROJECT_GTSP_COLS_H
+#define PROJECT_GTSP_COLS_H
 
-#include "graph.h"
+#include "lp.h"
+#include "gtsp.h"
 
-int flow_find_max_flow(
-        const struct Graph *digraph,
-        const double *capacities,
-        struct Node *from,
-        struct Node *to,
-        double *flow,
-        double *value);
+int GTSP_find_columns(struct LP *lp, struct GTSP *data);
 
-#endif //_PROJECT_FLOW_H_
+int GTSP_add_column(struct LP *lp, struct Edge *e);
+
+#endif //PROJECT_GTSP_COLS_H

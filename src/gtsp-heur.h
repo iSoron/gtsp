@@ -1,4 +1,5 @@
-/* Copyright (c) 2015 Alinson Xavier
+/* Copyright (c) 2015 Armin Sadeghi
+ * Copyright (c) 2015 Alinson Xavier
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,17 +15,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _PROJECT_FLOW_H_
-#define _PROJECT_FLOW_H_
+#ifndef PROJECT_GTSP_HEUR_H
+#define PROJECT_GTSP_HEUR_H
 
-#include "graph.h"
+#include "gtsp.h"
 
-int flow_find_max_flow(
-        const struct Graph *digraph,
-        const double *capacities,
-        struct Node *from,
-        struct Node *to,
-        double *flow,
-        double *value);
+int GTSP_find_initial_tour(struct GTSP *data, int *value, double *x);
 
-#endif //_PROJECT_FLOW_H_
+int GTSP_improve_solution(struct BNC *bnc, struct GTSP *data, double *x);
+
+#endif //PROJECT_GTSP_HEUR_H

@@ -78,6 +78,7 @@ int graph_build(
         graph->edges[i].index = i;
         graph->edges[i].from = &graph->nodes[a];
         graph->edges[i].to = &graph->nodes[b];
+        graph->edges[i].column = -1;
     }
 
     p = graph->adj;
@@ -134,31 +135,5 @@ int get_cut_edges_from_marks(
             cut_edges[(*cut_edges_count)++] = e;
     }
 
-    return 0;
-}
-
-int graph_dump(const struct Graph *graph)
-{
-    (void) graph;
-#if LOG_LEVEL >= LOG_LEVEL_DEBUG
-    log_debug("node_count: %d edge_count: %d\n", graph->node_count,
-            graph->edge_count);
-
-    for (int i = 0; i < graph->node_count; i++)
-    {
-        struct Node *n = &graph->nodes[i];
-        log_debug("%3d degree: %d mark: %d\n", n->index, n->degree, n->mark);
-    }
-
-    for (int i = 0; i < graph->edge_count; i++)
-    {
-        struct Edge *e = &graph->edges[i];
-        log_debug("%3d (%d, %d) weight: %d ", e->index, e->from->index,
-                e->to->index, e->weight);
-            if (e->reverse) printf("reverse: %d ", e->reverse->index);
-            printf("\n");
-
-    }
-    #endif
     return 0;
 }

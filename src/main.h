@@ -22,6 +22,7 @@ extern unsigned int SEED;
 extern double *OPTIMAL_X;
 extern double SUBTOUR_TIME;
 extern double COMBS_TIME;
+extern double COLUMNS_TIME;
 
 extern double LP_SOLVE_TIME;
 extern int LP_SOLVE_COUNT;
@@ -43,5 +44,7 @@ extern int COMBS_COUNT;
 extern char LP_FILENAME[100];
 extern char SOLUTION_FILENAME[100];
 extern char FRAC_SOLUTION_FILENAME[100];
+
+extern int BNC_NODE_COUNT;
 
 #endif

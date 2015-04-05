@@ -42,6 +42,6 @@
 /*
  * Time limit for the computation (user time, in seconds).
  */
-#define MAX_TOTAL_TIME 3600
+#define MAX_TOTAL_TIME (24*3600)
 
 #endif //PROJECT_PARAMS_H

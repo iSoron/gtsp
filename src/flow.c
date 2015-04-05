@@ -22,7 +22,117 @@
 
 int FLOW_MAX_FLOW_COUNT = 0;
 
-int flow_mark_reachable_nodes(
+static int mark_reachable_nodes(
+        const struct Graph *graph, double *residual_caps, struct Node *from);
+
+static int find_augmenting_path(
+        const struct Graph *graph,
+        const double *residual_caps,
+        struct Node *from,
+        struct Node *to,
+        int *path_length,
+        struct Edge **path_edges,
+        double *path_capacity);
+
+int flow_find_max_flow(
+        const struct Graph *digraph,
+        const double *capacities,
+        struct Node *from,
+        struct Node *to,
+        double *flow,
+        double *value)
+{
+    int rval = 0;
+
+    FLOW_MAX_FLOW_COUNT++;
+
+    for (int i = 0; i < digraph->node_count; i++)
+        digraph->nodes[i].mark = 0;
+
+    log_verbose("Solving flow problem:\n");
+
+    log_verbose("%d %d\n", digraph->node_count, digraph->edge_count);
+    log_verbose("%d %d\n", from->index, to->index);
+    for (int i = 0; i < digraph->edge_count; i++)
+            log_verbose("%d %d %.4lf\n", digraph->edges[i].from->index,
+                    digraph->edges[i].to->index, capacities[i]);
+
+    int path_length = 0;
+    double path_capacity = 0;
+    double *residual_caps = 0;
+    struct Edge **path_edges = 0;
+
+    residual_caps = (double *) malloc(digraph->edge_count * sizeof(double));
+    abort_if(!residual_caps, "could not allocate residual_caps");
+
+    path_edges = (struct Edge **) malloc(
+            digraph->edge_count * sizeof(struct Edge *));
+    abort_if(!path_edges, "could not allocate path_edges");
+
+    for (int i = 0; i < digraph->edge_count; i++)
+    {
+        flow[i] = 0;
+        residual_caps[i] = capacities[i];
+        abort_if(!digraph->edges[i].reverse,
+                "digraph must have reverse edge information");
+        abort_if(digraph->edges[i].reverse->reverse != &digraph->edges[i],
+                "invalid reverse edge");
+    }
+
+    *value = 0;
+
+    while (1)
+    {
+        find_augmenting_path(digraph, residual_caps, from, to, &path_length,
+                path_edges, &path_capacity);
+
+        if (path_length == 0) break;
+
+        log_verbose("Found augmenting path of capacity %.4lf:\n",
+                path_capacity);
+
+        (*value) += path_capacity;
+
+        for (int i = 0; i < path_length; i++)
+        {
+            struct Edge *e = &digraph->edges[path_edges[i]->index];
+
+            log_verbose("  %d %d (%d)\n", e->from->index, e->to->index,
+                    e->index);
+
+            residual_caps[e->index] -= path_capacity;
+            residual_caps[e->reverse->index] += path_capacity;
+
+            flow[e->index] += path_capacity;
+            flow[e->reverse->index] -= path_capacity;
+        }
+
+#if LOG_LEVEL >= LOG_LEVEL_VERBOSE
+        log_verbose("New residual capacities:\n");
+        for (int i = 0; i < digraph->edge_count; i++)
+        {
+            struct Edge *e = &digraph->edges[i];
+
+            if (residual_caps[i] < EPSILON) continue;
+
+            log_verbose("%d %d %.4lf (%d)\n", e->from->index, e->to->index,
+                    e->index, residual_caps[e->index]);
+        }
+#endif
+    }
+
+    log_verbose("No more paths found.\n");
+
+    rval = mark_reachable_nodes(digraph, residual_caps, from);
+    abort_if(rval, "mark_reachable_nodes failed");
+
+    CLEANUP:
+    if (path_edges) free(path_edges);
+    if (residual_caps) free(residual_caps);
+    return rval;
+}
+
+int static mark_reachable_nodes(
         const struct Graph *graph, double *residual_caps, struct Node *from)
 {
     int rval = 0;
@@ -34,7 +144,7 @@ int flow_mark_reachable_nodes(
     stack = (struct Node **) malloc(graph->node_count * sizeof(struct Node *));
     abort_if(!stack, "could not allocate stack");
 
-    parents = (int *) malloc(graph->node_count * sizeof(int ));
+    parents = (int *) malloc(graph->node_count * sizeof(int));
     abort_if(!parents, "could not allocate parents");
 
     stack[stack_top++] = from;
@@ -62,121 +172,16 @@ int flow_mark_reachable_nodes(
     log_verbose("Reachable nodes:\n");
     for (int i = 0; i < graph->node_count; i++)
         if (graph->nodes[i].mark)
-            log_verbose("    %d from %d\n", graph->nodes[i].index, parents[i]);
+                log_verbose("    %d from %d\n", graph->nodes[i].index,
+                        parents[i]);
 
     CLEANUP:
-    if(parents) free(parents);
+    if (parents) free(parents);
     if (stack) free(stack);
     return rval;
 }
 
-int flow_find_max_flow(
-        const struct Graph *digraph,
-        const double *capacities,
-        struct Node *from,
-        struct Node *to,
-        double *flow,
-        double *value)
-{
-    int rval = 0;
-
-    FLOW_MAX_FLOW_COUNT++;
-
-    for (int i = 0; i < digraph->node_count; i++)
-        digraph->nodes[i].mark = 0;
-
-    log_verbose("Input graph:\n");
-
-    #if LOG_LEVEL >= LOG_LEVEL_VERBOSE
-    graph_dump(digraph);
-    #endif
-
-    log_verbose("Solving flow problem:\n");
-
-    log_verbose("%d %d\n", digraph->node_count, digraph->edge_count);
-    log_verbose("%d %d\n", from->index, to->index);
-    for (int i = 0; i < digraph->edge_count; i++)
-    {
-        log_verbose("%d %d %.4lf\n", digraph->edges[i].from->index,
-                digraph->edges[i].to->index, capacities[i]);
-    }
-
-    int path_length;
-    struct Edge **path_edges = 0;
-    double path_capacity;
-
-    double *residual_caps = 0;
-
-    residual_caps = (double *) malloc(digraph->edge_count * sizeof(double));
-    abort_if(!residual_caps, "could not allocate residual_caps");
-
-    path_edges = (struct Edge **) malloc(
-            digraph->edge_count * sizeof(struct Edge *));
-    abort_if(!path_edges, "could not allocate path_edges");
-
-    for (int i = 0; i < digraph->edge_count; i++)
-    {
-        flow[i] = 0;
-        residual_caps[i] = capacities[i];
-        abort_if(!digraph->edges[i].reverse,
-                "digraph must have reverse edge information");
-        abort_if(digraph->edges[i].reverse->reverse != &digraph->edges[i],
-                "invalid reverse edge");
-    }
-
-    *value = 0;
-
-    while (1)
-    {
-        flow_find_augmenting_path(digraph, residual_caps, from, to,
-                &path_length, path_edges, &path_capacity);
-
-        if (path_length == 0) break;
-
-        log_verbose("Found augmenting path of capacity %.4lf:\n",
-                path_capacity);
-
-        (*value) += path_capacity;
-
-        for (int i = 0; i < path_length; i++)
-        {
-            struct Edge *e = &digraph->edges[path_edges[i]->index];
-
-            log_verbose("  %d %d (%d)\n", e->from->index, e->to->index, e->index);
-
-            residual_caps[e->index] -= path_capacity;
-            residual_caps[e->reverse->index] += path_capacity;
-
-            flow[e->index] += path_capacity;
-            flow[e->reverse->index] -= path_capacity;
-        }
-
-        log_verbose("New residual capacities:\n");
-        for (int i = 0; i < digraph->edge_count; i++)
-        {
-            #if LOG_LEVEL >= LOG_LEVEL_VERBOSE
-            struct Edge *e = &digraph->edges[i];
-            #endif
-
-            if (residual_caps[i] < EPSILON) continue;
-
-            log_verbose("%d %d %.4lf (%d)\n", e->from->index, e->to->index, e->index,
-                    residual_caps[e->index]);
-        }
-    }
-
-    log_verbose("No more paths found.\n");
-
-    rval = flow_mark_reachable_nodes(digraph, residual_caps, from);
-    abort_if(rval, "flow_mark_reachable_nodes failed");
-
-    CLEANUP:
-    if (path_edges) free(path_edges);
-    if (residual_caps) free(residual_caps);
-    return rval;
-}
-
-int flow_find_augmenting_path(
+int static find_augmenting_path(
         const struct Graph *graph,
         const double *residual_caps,
         struct Node *from,

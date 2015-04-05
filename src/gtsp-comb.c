@@ -45,6 +45,15 @@ static int add_comb_cut(
     abort_if(!rmatind, "could not allocate rmatind");
     abort_if(!rmatval, "could not allocate rmatval");
 
+    cut = (struct Row *) malloc(sizeof(struct Row));
+    cut->edges = (char *) malloc(graph->edge_count * sizeof(char));
+
+    abort_if(!cut, "could not allocate cut");
+    abort_if(!cut->edges, "could not allocate cut->edges");
+
+    for (int i = 0; i < graph->edge_count; i++)
+        cut->edges[i] = 0;
+
     double rhs = -component_sizes[current_component] - tooth_count +
             (tooth_count + 1) / 2;
 
@@ -57,7 +66,10 @@ static int add_comb_cut(
         if (components[clusters[e->from->index]] != current_component) continue;
         if (components[clusters[e->to->index]] != current_component) continue;
 
-        rmatind[nz] = e->index;
+        cut->edges[e->index] = 1;
+        if (e->column < 0) continue;
+
+        rmatind[nz] = e->column;
         rmatval[nz] = -1.0;
         nz++;
 
@@ -76,11 +88,16 @@ static int add_comb_cut(
         if (teeth[clusters[from->index]] != teeth[clusters[to->index]])
             continue;
 
+        cut->edges[e->index] = 1;
+        if (e->column < 0) continue;
+
         log_verbose("  tooth (%d %d)\n", e->from->index, e->to->index);
 
-        rmatind[nz] = e->index;
+        rmatind[nz] = e->column;
         rmatval[nz] = -1.0;
         nz++;
+
+
     }
 
 #if LOG_LEVEL >= LOG_LEVEL_VERBOSE
@@ -123,21 +140,20 @@ static int add_comb_cut(
 
     log_verbose("Violation: %.4lf >= %.4lf\n", lhs, rhs);
 
-    if (lhs + EPSILON > rhs)
-    {
-        free(rmatind);
-        free(rmatval);
-        goto CLEANUP;
-    }
-
-    cut = (struct Row *) malloc(sizeof(struct Row));
-    abort_if(!cut, "could not allocate cut");
+//    if (lhs + EPSILON > rhs)
+//    {
+//        free(rmatind);
+//        free(rmatval);
+//        goto CLEANUP;
+//    }
 
     cut->nz = nz;
     cut->sense = sense;
     cut->rhs = rhs;
     cut->rmatval = rmatval;
     cut->rmatind = rmatind;
+    cut->edge_val = -1.0;
+    cut->edge_count = graph->edge_count;
 
     rval = LP_add_cut(lp, cut);
     abort_if(rval, "LP_add_cut failed");
@@ -184,6 +200,7 @@ static int find_components(
                 if (neighbor->mark) continue;
 
                 double x_e = x[adj->edge->index];
+
                 if (x_e < EPSILON) continue;
                 if (x_e > 1 - EPSILON) continue;
 
@@ -238,7 +255,6 @@ static int find_teeth(
         struct Node *to = e->to;
 
         if (x[e->index] < 1 - EPSILON) continue;
-
         if (to->mark || from->mark) continue;
 
         int z = 0;
@@ -342,12 +358,13 @@ static int shrink_clusters(
     for (int i = 0; i < graph->edge_count; i++)
     {
         struct Edge *e = &graph->edges[i];
+        if(e->column < 0) continue;
 
         int from = clusters[e->from->index];
         int to = clusters[e->to->index];
         int shunk_e_index = edge_map[from * cluster_count + to];
 
-        shrunken_x[shunk_e_index] += x[e->index];
+        shrunken_x[shunk_e_index] += x[e->column];
     }
 
     CLEANUP:
