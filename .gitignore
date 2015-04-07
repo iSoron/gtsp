@@ -39,6 +39,7 @@
 .project
 *.lp
 *~
+
 .idea
 .settings
 .metadata
@@ -46,3 +47,5 @@ CMakeLists.txt
 Makefile
 stats.tab
 gtsp.in
+
+run/
